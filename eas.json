@@ -1,0 +1,51 @@
+{
+  "cli": {
+    "version": ">= 5.9.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "development": {
+      "autoIncrement": false,
+      "distribution": "internal",
+      "channel": "development",
+      "developmentClient": true,
+      "env": {
+        "APP_ENV": "development"
+      }
+    },
+    "preview": {
+      "autoIncrement": false,
+      "distribution": "internal",
+      "channel": "preview",
+      "env": {
+        "APP_ENV": "preview"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "distribution": "store",
+      "channel": "production",
+      "env": {
+        "APP_ENV": "production",
+        "EXPO_PUBLIC_ENABLE_REVENUECAT": "true",
+        "EXPO_PUBLIC_REVENUECAT_IOS_API_KEY": "appl_ioXWuFmGAbRJpPlSOxKRmUvHCcb",
+        "EXPO_PUBLIC_REVENUECAT_API_KEY": "appl_ioXWuFmGAbRJpPlSOxKRmUvHCcb"
+      },
+      "ios": {
+        "resourceClass": "m-medium",
+        "buildConfiguration": "Release"
+      },
+      "android": {
+        "buildType": "app-bundle"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "ascAppId": "6751785162"
+      },
+      "android": {}
+    }
+  }
+}

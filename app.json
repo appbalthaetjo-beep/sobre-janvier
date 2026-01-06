@@ -1,0 +1,80 @@
+{
+  "expo": {
+    "name": "Sobre",
+    "slug": "sobre-recovery-app",
+    "version": "1.0.7",
+    "orientation": "portrait",
+    "scheme": "sobre",
+    "icon": "./assets/images/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/images/image.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#000000"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "a4b4b61a-1ab3-4a6d-a0f4-7cf9a6becee1"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "com.balthazar.sobre",
+      "buildNumber": "51",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSPhotoLibraryUsageDescription": "Nous avons besoin d'accéder à votre galerie pour que vous puissiez choisir une photo de profil.",
+        "NSPhotoLibraryAddUsageDescription": "Nous avons besoin d'enregistrer votre photo de profil dans votre galerie.",
+        "NSCameraUsageDescription": "Nous avons besoin d'accéder à votre appareil photo si vous souhaitez prendre une photo de profil.",
+        "NSMicrophoneUsageDescription": "Nous avons besoin d'accéder au microphone pour utiliser certaines fonctionnalités vidéo en situation d'urgence.",
+        "NSUserTrackingUsageDescription": "Cette autorisation nous aide a optimiser nos campagnes publicitaires iOS tout en respectant votre vie privee."
+      }
+    },
+    "android": {
+      "package": "com.balthazar.sobre",
+      "permissions": [
+        "READ_MEDIA_IMAGES",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ],
+      "versionCode": 4
+    },
+    "web": {
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Nous avons besoin d'accéder à votre galerie pour que vous puissiez choisir une photo de profil.",
+          "cameraPermission": "Nous avons besoin d'accéder à votre appareil photo si vous souhaitez prendre une photo de profil."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Nous avons besoin d'accéder à votre appareil photo pour vous aider dans les situations d'urgence.",
+          "microphonePermission": "Nous avons besoin d'accéder au microphone pour enregistrer l'audio si nécessaire."
+        }
+      ],
+      "expo-router",
+      "expo-secure-store",
+      "expo-tracking-transparency",
+      [
+        "react-native-fbsdk-next",
+        {
+          "appID": "2293641301112058",
+          "clientToken": "f488c95ee4b738be249de866715ca3bb",
+          "displayName": "Sobre",
+          "scheme": "fb2293641301112058",
+          "advertiserIDCollectionEnabled": true,
+          "autoLogAppEventsEnabled": true,
+          "isAutoInitEnabled": true
+        }
+      ]
+    ],
+    "runtimeVersion": "1.0.7",
+    "updates": {
+      "url": "https://u.expo.dev/a4b4b61a-1ab3-4a6d-a0f4-7cf9a6becee1"
+    }
+  }
+}

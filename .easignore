@@ -1,0 +1,12 @@
+node_modules
+.expo
+.expo-shared
+ios/Pods
+ios/build
+android/.gradle
+android/app/build
+*.log
+*.tmp
+*.lock
+/ios
+/android

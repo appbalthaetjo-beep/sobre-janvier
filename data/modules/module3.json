@@ -1,0 +1,46 @@
+{
+  "moduleId": 3,
+  "title": "Module 3 - Retrouver l'équilibre émotionnel",
+  "lessons": [
+    {
+      "id": 11,
+      "title": "Comprendre le rôle des émotions",
+      "summary": "Identifier les émotions qui déclenchent l'envie.",
+      "content": "Souvent, la consommation est une réponse à une émotion inconfortable : stress, ennui, solitude, anxiété. Comprendre que ce n'est pas le désir en soi, mais l'émotion qui en est la cause, permet d'agir à la racine.",
+      "action": "Pendant une semaine, note chaque fois que tu ressens une envie quelle émotion tu vivais juste avant.",
+      "duration": "4 min"
+    },
+    {
+      "id": 12,
+      "title": "Apprendre à tolérer l'inconfort",
+      "summary": "Développer la capacité à traverser une émotion sans compenser.",
+      "content": "Fuir une émotion la rend plus forte. La clé est d'apprendre à la traverser. La respiration profonde, la méditation ou simplement accepter de se sentir mal quelques minutes renforcent ton mental. Chaque inconfort traversé est une victoire.",
+      "action": "La prochaine fois qu'une envie survient, respire profondément pendant 2 minutes sans rien faire d'autre.",
+      "duration": "3 min"
+    },
+    {
+      "id": 13,
+      "title": "Utiliser le journal émotionnel",
+      "summary": "Tenir un journal pour clarifier ses ressentis.",
+      "content": "Écrire régulièrement ce que tu ressens permet de mettre de l'ordre dans ton esprit. Cela aide à prendre du recul et à identifier les schémas émotionnels qui déclenchent la consommation. C'est un outil simple mais puissant.",
+      "action": "Chaque soir, écris en 3 phrases : 1) l'émotion principale du jour, 2) ce qui l'a déclenchée, 3) comment tu y as réagi.",
+      "duration": "4 min"
+    },
+    {
+      "id": 14,
+      "title": "Développer l'autocompassion",
+      "summary": "Remplacer l'autocritique par une attitude bienveillante envers soi.",
+      "content": "Beaucoup se flagellent après une rechute ou une émotion difficile. Cela alimente le cercle vicieux. L'autocompassion, c'est se traiter comme un ami cher : comprendre, soutenir, encourager. Cela favorise la résilience et le progrès.",
+      "action": "Quand tu fais une erreur, écris-toi une courte lettre comme si tu la destinais à un ami que tu soutiens.",
+      "duration": "3 min"
+    },
+    {
+      "id": 15,
+      "title": "Retrouver la joie dans les petites choses",
+      "summary": "Réactiver le circuit de la récompense naturelle.",
+      "content": "La dépendance court-circuite les plaisirs simples (musique, nature, sport). Reprendre goût aux petites joies quotidiennes rééquilibre le cerveau. Il ne s'agit pas de grandes réussites, mais d'apprendre à savourer ce qui existe déjà.",
+      "action": "Chaque jour, note 3 petites choses qui t'ont fait plaisir. Relis-les le soir.",
+      "duration": "5 min"
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "moduleId": 1,
+  "title": "Module 1 - Prendre conscience de son addiction",
+  "lessons": [
+    {
+      "id": 1,
+      "title": "Comprendre son addiction",
+      "summary": "Introduction à la notion d'addiction au porno et ses mécanismes psychologiques.",
+      "content": "L'addiction au porno ne se limite pas à une simple habitude : elle repose sur un cycle de dépendance lié à la dopamine. Chaque visionnage renforce le besoin de répéter l'acte, ce qui peut modifier la perception de la sexualité et des relations humaines. Comprendre que ce n'est pas une question de faiblesse mais de mécanismes cérébraux est une étape clé pour reprendre le contrôle.",
+      "action": "Note dans ton journal 3 situations où tu ressens le plus l'envie de regarder du porno.",
+      "duration": "4 min"
+    },
+    {
+      "id": 2,
+      "title": "Identifier ses déclencheurs",
+      "summary": "Reconnaître les situations, émotions ou contextes qui favorisent la rechute.",
+      "content": "Les déclencheurs peuvent être variés : stress, solitude, fatigue, ou simplement l'accès facile à internet. Identifier ces déclencheurs permet de comprendre que l'envie ne vient pas de nulle part : elle est souvent le fruit d'un schéma répétitif. Plus tu les repères tôt, plus tu peux mettre en place des stratégies d'évitement.",
+      "action": "Fais une liste de tes 5 déclencheurs principaux et note-les sur ton téléphone.",
+      "duration": "3 min"
+    },
+    {
+      "id": 3,
+      "title": "L'impact sur la santé mentale",
+      "summary": "Comprendre comment la consommation excessive affecte l'humeur et l'anxiété.",
+      "content": "Regarder du porno de manière excessive peut entraîner de la culpabilité, de l'anxiété et parfois des symptômes dépressifs. Ce n'est pas le porno en soi qui crée ces émotions, mais la perte de contrôle et la honte qui l'accompagnent. En prendre conscience, c'est reconnaître que la souffrance psychologique est réelle et qu'elle mérite d'être traitée.",
+      "action": "Chaque fois que tu regardes du porno, note ton état émotionnel avant et après (ex. stressé → vide).",
+      "duration": "5 min"
+    },
+    {
+      "id": 4,
+      "title": "L'impact sur la santé physique",
+      "summary": "Explorer les effets physiologiques de la consommation excessive.",
+      "content": "La consommation excessive de porno peut entraîner une baisse de l'énergie, des troubles du sommeil et parfois même des troubles érectiles. Ces symptômes sont liés à la surexploitation du système dopaminergique. Savoir que le corps aussi souffre aide à prendre conscience de l'urgence du changement.",
+      "action": "Pendant une semaine, note ton niveau d'énergie (sur 10) matin et soir, pour voir les variations.",
+      "duration": "3 min"
+    },
+    {
+      "id": 5,
+      "title": "La première étape du changement",
+      "summary": "Accepter qu'il y a un problème et qu'un changement est possible.",
+      "content": "La véritable première étape n'est pas d'arrêter du jour au lendemain, mais de reconnaître l'existence d'un problème. L'acceptation ouvre la voie à la responsabilité. C'est en passant de « je subis » à « je choisis d'agir » que le processus de guérison peut commencer.",
+      "action": "Écris une phrase d'engagement du type : « Je reconnais que j'ai perdu le contrôle et je choisis d'avancer pas à pas vers la liberté. »",
+      "duration": "2 min"
+    }
+  ]
+}

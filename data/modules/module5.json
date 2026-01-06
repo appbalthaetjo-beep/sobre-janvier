@@ -1,0 +1,46 @@
+{
+  "moduleId": 5,
+  "title": "Module 5 - Maintenir la liberté sur le long terme",
+  "lessons": [
+    {
+      "id": 21,
+      "title": "Comprendre le risque de rechute",
+      "summary": "La vigilance reste nécessaire.",
+      "content": "Même après plusieurs mois, le cerveau peut garder des traces de l'habitude. Une rechute ne signifie pas un échec total, mais elle rappelle qu'il faut rester attentif. Comprendre cela évite la culpabilité et renforce la préparation.",
+      "action": "Note trois situations précises où tu pourrais être vulnérable et prépare une réponse adaptée pour chacune.",
+      "duration": "4 min"
+    },
+    {
+      "id": 22,
+      "title": "Créer un environnement protecteur",
+      "summary": "S'entourer de conditions favorables.",
+      "content": "L'environnement influence les comportements. Supprimer les déclencheurs, renforcer les relations saines, aménager ses espaces de vie… tout cela protège la liberté acquise.",
+      "action": "Identifie un élément de ton environnement actuel que tu peux modifier dès aujourd'hui pour réduire les risques.",
+      "duration": "3 min"
+    },
+    {
+      "id": 23,
+      "title": "Développer la résilience face aux difficultés",
+      "summary": "Savoir rebondir quand la vie est dure.",
+      "content": "Le stress, les échecs ou les coups durs sont inévitables. La résilience, c'est la capacité à se relever. Elle se cultive par l'entraînement mental, le soutien social et l'expérience.",
+      "action": "Écris un moment difficile de ta vie que tu as surmonté et rappelle-toi les forces que tu as mobilisées.",
+      "duration": "4 min"
+    },
+    {
+      "id": 24,
+      "title": "Nourrir sa vie avec de nouveaux plaisirs",
+      "summary": "Remplacer le manque par des sources d'énergie positives.",
+      "content": "L'arrêt laisse un vide. Ce vide doit être comblé par de nouvelles passions, activités, apprentissages ou relations. La vie doit redevenir pleine et enthousiasmante.",
+      "action": "Liste trois activités qui te procurent du plaisir sain et engage-toi à les pratiquer régulièrement.",
+      "duration": "5 min"
+    },
+    {
+      "id": 25,
+      "title": "Transmettre et inspirer les autres",
+      "summary": "Transformer son parcours en force pour soi et pour les autres.",
+      "content": "Partager son expérience est une manière de consolider son identité et d'aider ceux qui traversent la même épreuve. Cela donne du sens et transforme la douleur en ressource.",
+      "action": "Écris une lettre ou un témoignage destiné à quelqu'un qui traverse encore une dépendance.",
+      "duration": "5 min"
+    }
+  ]
+}

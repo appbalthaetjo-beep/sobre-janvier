@@ -1,0 +1,46 @@
+{
+  "moduleId": 2,
+  "title": "Module 2 - Reprendre le contrôle",
+  "lessons": [
+    {
+      "id": 6,
+      "title": "Mettre en place un plan d'action",
+      "summary": "Créer une stratégie claire et réaliste pour réduire sa consommation.",
+      "content": "Vouloir arrêter sans plan, c'est comme partir en voyage sans carte. Fixe-toi des objectifs atteignables (ex. : réduire progressivement avant d'arrêter totalement). Définis des moments de la journée où tu risques le plus de craquer et prépare une alternative.",
+      "action": "Écris un plan simple avec 3 actions concrètes à mettre en place cette semaine.",
+      "duration": "3 min"
+    },
+    {
+      "id": 7,
+      "title": "Supprimer l'accès facile",
+      "summary": "Réduire les tentations en limitant l'accès aux contenus.",
+      "content": "Le cerveau en dépendance recherche la facilité. Supprimer les raccourcis, utiliser un bloqueur de sites ou limiter l'usage de certains appareils aux heures sensibles peut réduire drastiquement les rechutes. Moins l'accès est simple, plus tu gagnes du temps pour reprendre le contrôle.",
+      "action": "Installe un bloqueur de sites sur ton téléphone et ordinateur dès aujourd'hui.",
+      "duration": "4 min"
+    },
+    {
+      "id": 8,
+      "title": "Remplacer l'habitude par une alternative",
+      "summary": "Substituer la consommation par une activité positive.",
+      "content": "Le vide laissé par l'arrêt est le plus grand danger. Pour tenir, il faut remplir ce vide par des alternatives saines : sport, lecture, méditation, apprentissage d'une compétence. Le cerveau aime les récompenses, il faut lui en donner d'autres.",
+      "action": "Choisis 2 alternatives et engage-toi à les pratiquer chaque fois que l'envie surgit.",
+      "duration": "5 min"
+    },
+    {
+      "id": 9,
+      "title": "Gérer les rechutes intelligemment",
+      "summary": "Comprendre que la rechute fait partie du processus.",
+      "content": "Une rechute ne signifie pas un échec total. L'erreur est d'abandonner après une rechute. Analyse ce qui s'est passé : quel déclencheur, quel moment, quel état émotionnel ? Chaque rechute contient une information précieuse pour progresser.",
+      "action": "Si tu rechutes, note immédiatement les circonstances et ce que tu pourrais faire différemment la prochaine fois.",
+      "duration": "4 min"
+    },
+    {
+      "id": 10,
+      "title": "Renforcer la discipline quotidienne",
+      "summary": "Structurer sa journée pour limiter les moments à risque.",
+      "content": "La discipline est un muscle. Plus tu structures tes journées (lever à heure fixe, tâches claires, moments de repos planifiés), moins ton cerveau laisse de place à la tentation. La liberté vient de la structure, pas de l'improvisation.",
+      "action": "Planifie ta journée de demain heure par heure et respecte ce cadre.",
+      "duration": "3 min"
+    }
+  ]
+}
