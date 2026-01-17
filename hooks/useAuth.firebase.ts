@@ -11,6 +11,7 @@ import {
 import { auth, authReady } from '@/lib/firebase';
 import { setShouldShowOnboardingFlag } from '@/utils/onboardingFlag';
 import { firebaseConfig } from '@/config/firebase.config';
+import { identifyPostHogUser } from '../lib/posthog';
 
 const PASSWORD_RESET_REDIRECT_URL =
   process.env.EXPO_PUBLIC_PASSWORD_RESET_REDIRECT_URL ||
@@ -61,6 +62,10 @@ export function useFirebaseAuth() {
       unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    void identifyPostHogUser(user?.uid ?? null);
+  }, [user?.uid]);
 
   const signIn = async (email: string, password: string) => {
     try {
@@ -188,4 +193,3 @@ export function useFirebaseAuth() {
     logout,
   };
 }
-

@@ -12,9 +12,14 @@ export function useRevenueCat() {
     const initializeRevenueCat = async () => {
       try {
         setIsLoading(true);
-        await initRevenueCat(); // init RC
+        const ready = await initRevenueCat(); // init RC
 
         if (!isMounted) {
+          return;
+        }
+
+        if (!ready) {
+          setHasAccess(false);
           return;
         }
 

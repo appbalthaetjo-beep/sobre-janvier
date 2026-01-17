@@ -1,1 +1,1 @@
-export { initPostHog, trackOnboardingScreen, identifyPostHogUser } from '../src/lib/posthog';
+export { initPostHog, trackOnboardingScreen, identifyPostHogUser, capturePostHogEvent } from '../src/lib/posthog';

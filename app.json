@@ -2,7 +2,7 @@
   "expo": {
     "name": "Sobre",
     "slug": "sobre-recovery-app",
-    "version": "1.0.7",
+    "version": "1.0.8",
     "orientation": "portrait",
     "scheme": "sobre",
     "icon": "./assets/images/icon.png",
@@ -19,7 +19,7 @@
     },
     "ios": {
       "bundleIdentifier": "com.balthazar.sobre",
-      "buildNumber": "51",
+      "buildNumber": "56",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSPhotoLibraryUsageDescription": "Nous avons besoin d'accéder à votre galerie pour que vous puissiez choisir une photo de profil.",
@@ -67,12 +67,12 @@
           "displayName": "Sobre",
           "scheme": "fb2293641301112058",
           "advertiserIDCollectionEnabled": true,
-          "autoLogAppEventsEnabled": true,
+          "autoLogAppEventsEnabled": false,
           "isAutoInitEnabled": true
         }
       ]
     ],
-    "runtimeVersion": "1.0.7",
+    "runtimeVersion": "1.0.8",
     "updates": {
       "url": "https://u.expo.dev/a4b4b61a-1ab3-4a6d-a0f4-7cf9a6becee1"
     }

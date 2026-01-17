@@ -1,10 +1,11 @@
 import 'react-native-get-random-values';
-import { Platform, Linking } from 'react-native';
+import { AppState, InteractionManager, Platform, Linking } from 'react-native';
 import Constants from 'expo-constants';
 import Purchases, { CustomerInfo } from 'react-native-purchases';
 import PurchasesUI, { PAYWALL_RESULT } from 'react-native-purchases-ui';
 import { promoEvents } from './analytics';
 import { syncRevenueCatFacebookAnonId } from './metaAttribution';
+import { capturePostHogEvent } from './posthog';
 
 const APP_OWNERSHIP = Constants?.appOwnership ?? 'unknown';
 const FORCE_ENABLE = process.env.EXPO_PUBLIC_ENABLE_REVENUECAT === 'true';
@@ -21,12 +22,28 @@ if (!ENABLE_REVENUECAT) {
 }
 
 let purchasesConfigured = false;
+let didConfigure = false;
+let initPromise: Promise<boolean> | null = null;
+let runtimeReadyPromise: Promise<void> | null = null;
+
+type PaywallTrackingContext = {
+  step?: number;
+  placement?: string;
+  source?: string;
+};
+
+function logCustomerInfo(source: string, info: CustomerInfo) {
+  console.log(`[RevenueCat] ${source} entitlements.active`, info?.entitlements?.active ?? {});
+  console.log(`[RevenueCat] ${source} activeSubscriptions`, info?.activeSubscriptions ?? []);
+}
 
 function markPurchasesUnconfigured(error?: unknown) {
-  purchasesConfigured = false;
-  if (error) {
-    console.warn('RevenueCat marked as unconfigured:', error);
+  if (didConfigure) {
+    void error;
+    return;
   }
+  purchasesConfigured = false;
+  void error;
 }
 
 function getRevenueCatApiKeyForPlatform(): string | null {
@@ -96,13 +113,10 @@ async function ensurePurchasesConfigured() {
     return true;
   }
 
-  try {
-    const alreadyConfigured = await Purchases.isConfigured?.();
-    purchasesConfigured = Boolean(alreadyConfigured);
-  } catch (error) {
-    markPurchasesUnconfigured(error);
+  if (initPromise) {
+    await initPromise;
+    return purchasesConfigured;
   }
-
   return purchasesConfigured;
 }
 
@@ -117,39 +131,75 @@ export const ENTITLEMENT_ID = 'Accès à SOBRE.';
 export const WEB_PURCHASE_LINK_PROMO = '<<COLLER ICI le Web Purchase Link de l\'offering promo>>';
 export const WEB_PURCHASE_LINK_DEFAULT = '<<COLLER ICI le Web Purchase Link de l\'offering default>>';
 
-export async function initRevenueCat(userId?: string) {
+export async function initRevenueCat(userId?: string): Promise<boolean> {
   if (!ENABLE_REVENUECAT) {
     console.log('RevenueCat disabled - skipping initialization');
-    return;
+    return false;
   }
 
   if (await ensurePurchasesConfigured()) {
-    return;
+    return true;
+  }
+
+  if (initPromise) {
+    return initPromise;
   }
 
   const apiKey = getRevenueCatApiKeyForPlatform();
   if (!apiKey) {
-    return;
+    return false;
   }
 
-  try {
-    await Purchases.configure({
-      apiKey,
-      appUserID: userId,
-    });
-    purchasesConfigured = true;
-    console.log('RevenueCat configured successfully');
-
+  initPromise = (async () => {
     try {
-      await syncRevenueCatFacebookAnonId();
-    } catch (syncError) {
-      console.warn('[RevenueCat] Failed to sync FB anonymous ID', syncError);
+      if (!runtimeReadyPromise) {
+        runtimeReadyPromise = new Promise((resolve) => {
+          const run = () => {
+            InteractionManager.runAfterInteractions(() => resolve());
+          };
+
+          if (AppState.currentState === 'active') {
+            run();
+            return;
+          }
+
+          const subscription = AppState.addEventListener?.('change', (state) => {
+            if (state === 'active') {
+              subscription?.remove?.();
+              run();
+            }
+          });
+        });
+      }
+
+      await runtimeReadyPromise;
+
+      await Purchases.configure({
+        apiKey,
+        appUserID: userId,
+      });
+      purchasesConfigured = true;
+      didConfigure = true;
+      console.log('RevenueCat configured successfully');
+
+      try {
+        await syncRevenueCatFacebookAnonId();
+      } catch (syncError) {
+        console.warn('[RevenueCat] Failed to sync FB anonymous ID', syncError);
+      }
+
+      return true;
+    } catch (error) {
+      markPurchasesUnconfigured(error);
+      console.error('RevenueCat initialization error:', error);
+      // Continue without RevenueCat if initialization fails
+      return false;
+    } finally {
+      initPromise = null;
     }
-  } catch (error) {
-    markPurchasesUnconfigured(error);
-    console.error('RevenueCat initialization error:', error);
-    // Continue without RevenueCat if initialization fails
-  }
+  })();
+
+  return initPromise;
 }
 
 export function onCustomerInfoChange(cb: (hasAccess: boolean, info: CustomerInfo) => void) {
@@ -159,13 +209,13 @@ export function onCustomerInfoChange(cb: (hasAccess: boolean, info: CustomerInfo
   }
 
   if (!purchasesConfigured) {
-    console.warn('RevenueCat listener requested before configuration');
     return () => {};
   }
 
   try {
     // Renvoie l'unsubscribe
     return Purchases.addCustomerInfoUpdateListener((info) => {
+      logCustomerInfo('listener', info);
       const hasAccess = Boolean(info.entitlements?.active?.[ENTITLEMENT_ID]);
       cb(hasAccess, info);
     });
@@ -182,12 +232,12 @@ export async function isProActive(): Promise<boolean> {
   }
 
   if (!purchasesConfigured && !(await ensurePurchasesConfigured())) {
-    console.warn('RevenueCat not configured - returning false for isProActive');
     return false;
   }
 
   try {
     const info = await Purchases.getCustomerInfo();
+    logCustomerInfo('getCustomerInfo:isProActive', info);
     return Boolean(info.entitlements?.active?.[ENTITLEMENT_ID]);
   } catch (error) {
     markPurchasesUnconfigured(error);
@@ -203,12 +253,13 @@ export async function getLatestCustomerInfo(): Promise<CustomerInfo | null> {
   }
 
   if (!purchasesConfigured && !(await ensurePurchasesConfigured())) {
-    console.warn('RevenueCat not configured - returning null for getLatestCustomerInfo');
     return null;
   }
 
   try {
-    return await Purchases.getCustomerInfo();
+    const info = await Purchases.getCustomerInfo();
+    logCustomerInfo('getCustomerInfo:getLatestCustomerInfo', info);
+    return info;
   } catch (error) {
     markPurchasesUnconfigured(error);
     console.error('RevenueCat getLatestCustomerInfo error:', error);
@@ -223,7 +274,6 @@ export async function restorePurchases(): Promise<boolean> {
   }
 
   if (!purchasesConfigured && !(await ensurePurchasesConfigured())) {
-    console.warn('RevenueCat not configured - returning false for restorePurchases');
     return false;
   }
 
@@ -239,8 +289,59 @@ export async function restorePurchases(): Promise<boolean> {
 
 // ---- Paywalls ----
 
+function buildPaywallTrackingPayload(
+  result: PAYWALL_RESULT,
+  tracking: PaywallTrackingContext | undefined,
+  offering?: any,
+) {
+  const payload: Record<string, any> = { result };
+
+  if (typeof tracking?.step === 'number') {
+    payload.step = tracking.step;
+  }
+
+  if (tracking?.placement) {
+    payload.placement = tracking.placement;
+  }
+
+  if (tracking?.source) {
+    payload.source = tracking.source;
+  }
+
+  const offeringId = typeof offering?.identifier === 'string' ? offering.identifier : undefined;
+  if (offeringId) {
+    payload.offering_id = offeringId;
+  }
+
+  const paywallId =
+    (typeof offering?.paywall?.identifier === 'string' ? offering.paywall.identifier : undefined) ||
+    (typeof offering?.metadata?.paywall_id === 'string' ? offering.metadata.paywall_id : undefined);
+
+  if (paywallId) {
+    payload.paywall_id = paywallId;
+  }
+
+  return payload;
+}
+
+async function presentPaywallAndTrack(
+  params: { offering?: any; displayCloseButton?: boolean },
+  tracking?: PaywallTrackingContext,
+) {
+  const result = await PurchasesUI.presentPaywall(params);
+  const payload = buildPaywallTrackingPayload(result, tracking, params?.offering);
+
+  await capturePostHogEvent('paywall_result', payload);
+
+  if (result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED) {
+    await capturePostHogEvent('paywall_converted', payload);
+  }
+
+  return result;
+}
+
 // Paywall standard (offering "default")
-export async function showDefaultPaywall(): Promise<PAYWALL_RESULT> {
+export async function showDefaultPaywall(tracking?: PaywallTrackingContext): Promise<PAYWALL_RESULT> {
   if (!ENABLE_REVENUECAT) {
     console.warn('RevenueCat disabled - cannot show default paywall');
     return PAYWALL_RESULT.NOT_PRESENTED;
@@ -249,7 +350,7 @@ export async function showDefaultPaywall(): Promise<PAYWALL_RESULT> {
   await promoEvents.paywallOpen('default');
   try {
     if (!purchasesConfigured && !(await ensurePurchasesConfigured())) {
-      throw new Error('RevenueCat not configured');
+      return PAYWALL_RESULT.NOT_PRESENTED;
     }
 
     if (!CAN_USE_NATIVE_PAYWALL || typeof PurchasesUI?.presentPaywall !== 'function') {
@@ -262,10 +363,10 @@ export async function showDefaultPaywall(): Promise<PAYWALL_RESULT> {
     const mainOffering = offerings.all?.main;
 
     if (mainOffering) {
-      return await PurchasesUI.presentPaywall({ offering: mainOffering, displayCloseButton: false });
+      return await presentPaywallAndTrack({ offering: mainOffering, displayCloseButton: false }, tracking);
     }
 
-    return await PurchasesUI.presentPaywall({ displayCloseButton: false });
+    return await presentPaywallAndTrack({ displayCloseButton: false }, tracking);
   } catch (error) {
     console.warn('Paywall default error', error);
     await promoEvents.purchaseCancel('default');
@@ -274,7 +375,7 @@ export async function showDefaultPaywall(): Promise<PAYWALL_RESULT> {
 }
 
 // Paywall promo (offering "promo")
-export async function showPromoPaywall(): Promise<PAYWALL_RESULT> {
+export async function showPromoPaywall(tracking?: PaywallTrackingContext): Promise<PAYWALL_RESULT> {
   if (!ENABLE_REVENUECAT) {
     console.warn('RevenueCat disabled - cannot show promo paywall');
     return PAYWALL_RESULT.NOT_PRESENTED;
@@ -283,7 +384,7 @@ export async function showPromoPaywall(): Promise<PAYWALL_RESULT> {
   await promoEvents.paywallOpen('promo');
   try {
     if (!purchasesConfigured && !(await ensurePurchasesConfigured())) {
-      throw new Error('RevenueCat not configured');
+      return PAYWALL_RESULT.NOT_PRESENTED;
     }
 
     if (!CAN_USE_NATIVE_PAYWALL || typeof PurchasesUI?.presentPaywall !== 'function') {
@@ -297,10 +398,10 @@ export async function showPromoPaywall(): Promise<PAYWALL_RESULT> {
 
     if (!promoOffering) {
       console.warn('Promo offering not configured, falling back to default paywall');
-      return await PurchasesUI.presentPaywall({ displayCloseButton: true });
+      return await presentPaywallAndTrack({ displayCloseButton: true }, tracking);
     }
 
-    return await PurchasesUI.presentPaywall({ offering: promoOffering, displayCloseButton: true });
+    return await presentPaywallAndTrack({ offering: promoOffering, displayCloseButton: true }, tracking);
   } catch (error) {
     console.warn('Paywall promo error', error);
     await promoEvents.purchaseCancel('promo');
@@ -327,12 +428,12 @@ export async function userHasAccess(): Promise<boolean> {
   }
 
   if (!purchasesConfigured && !(await ensurePurchasesConfigured())) {
-    console.warn('RevenueCat not configured - returning false for userHasAccess');
     return false;
   }
 
   try {
     const info = await Purchases.getCustomerInfo();
+    logCustomerInfo('getCustomerInfo:userHasAccess', info);
     return !!info.entitlements.active?.[ENTITLEMENT_ID];
   } catch (error) {
     markPurchasesUnconfigured(error);
@@ -349,7 +450,7 @@ export async function purchasePackage(packageToPurchase) {
   }
 
   if (!purchasesConfigured && !(await ensurePurchasesConfigured())) {
-    throw new Error('RevenueCat not configured');
+    return;
   }
 
   try {

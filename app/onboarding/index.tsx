@@ -44,6 +44,13 @@ export default function OnboardingIntro() {
           </TouchableOpacity>
         </View>
 
+        <View style={styles.loginLinkContainer}>
+          <Text style={styles.loginLinkText}>Deja un compte ?</Text>
+          <TouchableOpacity onPress={() => router.push('/auth/login')}>
+            <Text style={styles.loginLinkAction}>Se connecter</Text>
+          </TouchableOpacity>
+        </View>
+
       </View>
     </SafeAreaView>
   );
@@ -88,6 +95,21 @@ const styles = StyleSheet.create({
   },
   buttonSection: {
     alignItems: 'center',
+  },
+  loginLinkContainer: {
+    marginTop: 24,
+    alignItems: 'center',
+    gap: 6,
+  },
+  loginLinkText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#A3A3A3',
+  },
+  loginLinkAction: {
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
+    color: '#FFD700',
   },
   startButton: {
     backgroundColor: '#FFD700', // Jaune

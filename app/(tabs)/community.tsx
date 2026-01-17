@@ -32,6 +32,8 @@ export default function CommunityScreen() {
   const [sending, setSending] = useState(false);
   const [posts, setPosts] = useState<CommunityPost[]>([]);
   const [activeTab, setActiveTab] = useState<'feed' | 'ranking'>('feed');
+  const listRef = useRef<FlatList<CommunityPost>>(null);
+  const shouldScrollToTopRef = useRef(false);
 
   const {
     subscribeToCommunityPosts,
@@ -40,7 +42,7 @@ export default function CommunityScreen() {
   } = useFirestore();
   const subscribeRef = useRef(subscribeToCommunityPosts);
   const sortByCreatedAt = (list: CommunityPost[]) =>
-    [...list].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    [...list].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
   useEffect(() => {
     subscribeRef.current = subscribeToCommunityPosts;
@@ -67,6 +69,14 @@ export default function CommunityScreen() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!shouldScrollToTopRef.current || activeTab !== 'feed') {
+      return;
+    }
+    shouldScrollToTopRef.current = false;
+    listRef.current?.scrollToOffset({ offset: 0, animated: true });
+  }, [posts, activeTab]);
+
   const canSendPost = Boolean(user) && inputValue.trim().length > 0 && !sending;
 
   const handleSendPost = async () => {
@@ -87,6 +97,7 @@ export default function CommunityScreen() {
         return;
       }
       if (data?.post) {
+        shouldScrollToTopRef.current = true;
         setPosts((prev) => sortByCreatedAt([...prev, normalizePost(data.post)]));
       }
       setInputValue('');
@@ -134,6 +145,7 @@ export default function CommunityScreen() {
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <FlatList
+          ref={listRef}
           data={activeTab === 'feed' ? posts : []}
           keyExtractor={(item) => item.id}
           renderItem={renderPost}

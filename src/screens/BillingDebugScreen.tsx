@@ -23,6 +23,8 @@ export default function BillingDebugScreen() {
       // Vérifier si RevenueCat est activé
       const offeringsData = await Purchases.getOfferings();
       const customerInfo = await Purchases.getCustomerInfo();
+      console.log('[RevenueCat] billing debug entitlements.active', customerInfo?.entitlements?.active ?? {});
+      console.log('[RevenueCat] billing debug activeSubscriptions', customerInfo?.activeSubscriptions ?? []);
       
       setOfferings(offeringsData);
       setInfo(customerInfo);

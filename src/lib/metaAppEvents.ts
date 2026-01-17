@@ -2,11 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getTrackingPermissionsAsync, requestTrackingPermissionsAsync } from 'expo-tracking-transparency';
 import { Platform } from 'react-native';
 import { AppEventsLogger, Settings } from 'react-native-fbsdk-next';
-import { ENTITLEMENT_ID, getLatestCustomerInfo, initRevenueCat, onCustomerInfoChange } from '@/src/lib/revenuecat';
-import type { CustomerInfo } from 'react-native-purchases';
 
 const FACEBOOK_APP_ID = '2293641301112058';
-const START_TRIAL_STORAGE_KEY = 'meta_last_start_trial_purchase';
 const ATT_REQUESTED_KEY = 'meta_att_prompt_requested';
 
 let facebookInitialized = false;
@@ -94,54 +91,6 @@ async function logActivateAppOnce(trackingStatus: string | null) {
   }
 }
 
-function getActiveTrial(info: CustomerInfo) {
-  const entitlement = info?.entitlements?.active?.[ENTITLEMENT_ID];
-  if (!entitlement) {
-    return null;
-  }
-
-  const periodType = `${entitlement.periodType ?? ''}`.toUpperCase();
-  const isTrialPeriod = periodType === 'TRIAL' || periodType === 'INTRO';
-  if (!isTrialPeriod) {
-    return null;
-  }
-
-  return {
-    token:
-      `${entitlement.productIdentifier ?? 'unknown'}:` +
-      `${entitlement.latestPurchaseDateMillis ?? entitlement.latestPurchaseDate ?? info.requestDate}`,
-    productId: entitlement.productIdentifier ?? 'unknown',
-  };
-}
-
-async function maybeLogStartTrial(info: CustomerInfo) {
-  if (Platform.OS !== 'ios') {
-    return;
-  }
-
-  const trial = getActiveTrial(info);
-  if (!trial) {
-    return;
-  }
-
-  try {
-    const lastLoggedToken = await AsyncStorage.getItem(START_TRIAL_STORAGE_KEY);
-    if (lastLoggedToken === trial.token) {
-      return;
-    }
-
-    const ready = await ensureFacebookInitialized(null);
-    if (!ready) {
-      return;
-    }
-
-    AppEventsLogger.logEvent('StartTrial', { productId: trial.productId });
-    await AsyncStorage.setItem(START_TRIAL_STORAGE_KEY, trial.token);
-  } catch (error) {
-    console.warn('[MetaEvents] Failed to log StartTrial', error);
-  }
-}
-
 export async function setupMetaAppEvents(): Promise<() => void> {
   if (Platform.OS !== 'ios') {
     return () => {};
@@ -151,18 +100,7 @@ export async function setupMetaAppEvents(): Promise<() => void> {
     const trackingStatus = await requestTrackingPermissionOnce();
     await applyAdvertiserTrackingPreference(trackingStatus);
     await logActivateAppOnce(trackingStatus);
-
-    await initRevenueCat();
-    const initialInfo = await getLatestCustomerInfo();
-    if (initialInfo) {
-      await maybeLogStartTrial(initialInfo);
-    }
-
-    const unsubscribe = onCustomerInfoChange((_, info) => {
-      void maybeLogStartTrial(info);
-    });
-
-    return typeof unsubscribe === 'function' ? unsubscribe : () => {};
+    return () => {};
   } catch (error) {
     console.warn('[MetaEvents] setup failed', error);
     return () => {};

@@ -4,13 +4,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Platform } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
-import { ArrowLeft, User, CircleHelp as HelpCircle, Bell, Instagram, Video, LogOut, Trash2, Shield, FileText, Crown, AlertTriangle } from 'lucide-react-native';
+import { ArrowLeft, User, CircleHelp as HelpCircle, Bell, Instagram, Video, LogOut, Trash2, Shield, FileText, Crown } from 'lucide-react-native';
 import { useAuth } from '@/hooks/useAuth';
 import { useRevenueCat } from '@/hooks/useRevenueCat';
 import { openManageSubscription } from '@/src/lib/revenuecat';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { formatDateFrench } from '@/utils/date';
-import { readNavigationHistory, clearNavigationHistory } from '@/utils/diagnostics';
 import { supabase } from '@/lib/supabase';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, limit, query, where } from 'firebase/firestore';
@@ -108,43 +107,6 @@ Cordialement`);
     setShowRestoreModal(true);
   };
 
-  const handleShowNavigationHistory = React.useCallback(async () => {
-    try {
-      const history = await readNavigationHistory();
-      if (!history || history.length === 0) {
-        Alert.alert('Diagnostic', 'Aucun historique de navigation.');
-        return;
-      }
-
-      const preview = history
-        .slice(Math.max(history.length - 10, 0))
-        .map((entry) => {
-          const meta = entry.meta ? JSON.stringify(entry.meta) : 'no meta';
-          return `${entry.timestamp} - ${entry.action} -> ${entry.path} (${meta})`;
-        })
-        .join('\n\n');
-
-      Alert.alert(
-        'Historique de navigation',
-        preview,
-        [
-          {
-            text: 'Effacer',
-            style: 'destructive',
-            onPress: () => {
-              clearNavigationHistory();
-              Alert.alert('Diagnostic', 'Historique efface.');
-            },
-          },
-          { text: 'Fermer', style: 'cancel' },
-        ],
-      );
-    } catch (error) {
-      console.error('[Settings] Failed to show navigation history', error);
-      Alert.alert('Diagnostic', "Impossible de recuperer l'historique.");
-    }
-  }, []);
-
   const settingsItems = [
     {
       id: 'profile',
@@ -183,13 +145,6 @@ Cordialement`);
       icon: Video,
       action: handleTikTok,
       description: 'Protection pour TikTok'
-    },
-    {
-      id: 'navigation-history',
-      title: 'Diagnostic navigation',
-      icon: AlertTriangle,
-      action: handleShowNavigationHistory,
-      description: 'Consulter le dernier historique de navigation'
     },
     {
       id: 'privacy',
@@ -236,6 +191,14 @@ Cordialement`);
       icon: User,
       action: handleRestoreProgress,
       description: 'Restaurer vos données de progression',
+    });
+  } else {
+    settingsItems.splice(1, 0, {
+      id: 'save-restore-progress',
+      title: 'Sauvegarder / Restaurer mes progrès',
+      icon: User,
+      action: () => router.push('/auth/login'),
+      description: 'Se connecter pour sauvegarder et restaurer vos données',
     });
   }
 

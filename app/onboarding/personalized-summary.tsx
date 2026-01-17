@@ -22,9 +22,16 @@ import {
   isRevenueCatEnabled,
   isProActive,
 } from '@/src/lib/revenuecat';
+import { trackOnboardingScreen } from '@/src/lib/posthog';
 
 const PROMO_PAYWALL_DELAY_MS = 5000;
 const PROMO_PAYWALL_AUTO_ENABLED = false; // Toggle to true to re-enable automatic promo paywall triggers
+const PAYWALL_ONBOARDING_STEP = 37;
+const PAYWALL_ONBOARDING_CONTEXT = {
+  step: PAYWALL_ONBOARDING_STEP,
+  placement: 'onboarding',
+  source: 'personalized_summary',
+};
 
 type RoadmapItem = {
   title: string;
@@ -184,8 +191,10 @@ export default function PersonalizedSummaryScreen() {
       return true;
     }
 
+    void trackOnboardingScreen({ screen_name: 'paywall', ...PAYWALL_ONBOARDING_CONTEXT });
+
     try {
-      await showDefaultPaywall();
+      await showDefaultPaywall(PAYWALL_ONBOARDING_CONTEXT);
     } catch (error) {
       console.warn('Default paywall presentation failed', error);
     }
@@ -202,7 +211,7 @@ export default function PersonalizedSummaryScreen() {
     await wait(PROMO_PAYWALL_DELAY_MS);
 
     try {
-      await showPromoPaywall();
+      await showPromoPaywall(PAYWALL_ONBOARDING_CONTEXT);
     } catch (error) {
       console.warn('Promo paywall presentation failed', error);
     }

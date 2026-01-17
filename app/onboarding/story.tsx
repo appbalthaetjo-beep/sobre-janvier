@@ -27,7 +27,7 @@ export default function OnboardingStoryScreen() {
 
   const handleContinue = () => {
     triggerTap('medium');
-    router.push('/onboarding/auth');
+    router.push('/onboarding/sobriety-card');
   };
 
   return (

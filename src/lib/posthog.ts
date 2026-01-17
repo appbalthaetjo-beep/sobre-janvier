@@ -73,6 +73,8 @@ export async function initPostHog(): Promise<PostHog | null> {
 type OnboardingScreenPayload = {
   step: number;
   screen_name: string;
+  placement?: string;
+  source?: string;
 };
 
 export async function trackOnboardingScreen(payload: OnboardingScreenPayload) {
@@ -83,10 +85,20 @@ export async function trackOnboardingScreen(payload: OnboardingScreenPayload) {
   if (!instance) {
     return;
   }
-  instance.capture('onboarding_screen_viewed', {
+  const properties: Record<string, any> = {
     step: payload.step,
     screen_name: payload.screen_name,
-  });
+  };
+
+  if (payload.placement) {
+    properties.placement = payload.placement;
+  }
+
+  if (payload.source) {
+    properties.source = payload.source;
+  }
+
+  instance.capture('onboarding_screen_viewed', properties);
 }
 
 export async function identifyPostHogUser(userId: string | null | undefined) {
@@ -102,4 +114,17 @@ export async function identifyPostHogUser(userId: string | null | undefined) {
   }
 
   instance.identify(userId);
+}
+
+export async function capturePostHogEvent(event: string, properties: Record<string, any> = {}) {
+  if (!event) {
+    return;
+  }
+
+  const instance = await initPostHog();
+  if (!instance) {
+    return;
+  }
+
+  instance.capture(event, properties);
 }

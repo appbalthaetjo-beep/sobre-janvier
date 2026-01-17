@@ -17,13 +17,10 @@ import { readShouldShowOnboardingFlag, subscribeShouldShowOnboardingFlag } from 
 import { recordNavigationEvent } from '@/utils/diagnostics';
 import { trackOnboardingScreen } from '../lib/posthog';
 import { initSobrietyStorageCompat } from '@/lib/storageCompat';
-import { AppEventsLogger, Settings } from 'react-native-fbsdk-next';
-import { initMetaDiagnostics } from '@/lib/metaDiagnostics';
-import { initMetaSdk } from '@/lib/metaSdk';
+import { initMetaOnce, sendMetaTestEvent } from '@/lib/metaSdk';
 
 const ONBOARDING_STEPS: { path: string; screen_name: string }[] = [
   { path: '/onboarding/index', screen_name: 'welcome' },
-  { path: '/onboarding/auth', screen_name: 'auth' },
   { path: '/onboarding/story', screen_name: 'story' },
   { path: '/onboarding/sobriety-card', screen_name: 'sobriety_card' },
   { path: '/onboarding/question-1', screen_name: 'question_1' },
@@ -87,33 +84,14 @@ function RootLayoutInner() {
     'Inter-SemiBold': Inter_600SemiBold,
     'Inter-Bold': Inter_700Bold,
   });
-  const fbDebugInitRef = useRef(false);
-
   useEffect(() => {
-    if (Platform.OS !== 'ios') {
-      return;
-    }
-    if (fbDebugInitRef.current) {
-      return;
-    }
-    fbDebugInitRef.current = true;
-
     (async () => {
-      try {
-        await initMetaSdk();
-        console.log('[FB DEBUG] FB SDK LOADED');
-        console.log('[FB DEBUG] getAppID (before set)', Settings.getAppID?.());
-        Settings.setAppID('2293641301112058');
-        console.log('[FB DEBUG] getAppID (after set)', Settings.getAppID?.());
-        await Settings.initializeSDK();
-        console.log('[FB DEBUG] FB SDK INITIALIZED');
-        AppEventsLogger.logEvent('debug_test_event');
-        console.log('[FB DEBUG] FB EVENT SENT');
-        await initMetaDiagnostics();
-      } catch (error) {
-        console.warn('[FB DEBUG] Failed to init/send event', error);
-      }
-    })();
+      console.log('[META] exports', { initMetaOnce: typeof initMetaOnce, sendMetaTestEvent: typeof sendMetaTestEvent });
+      await initMetaOnce();
+      await sendMetaTestEvent();
+    })().catch((error) => {
+      console.warn('[META] init failed', error);
+    });
   }, []);
 
   useEffect(() => {
@@ -224,18 +202,21 @@ function RootLayoutInner() {
   }, [fontsLoaded, fontError]);
 
   useEffect(() => {
-    const loadFlag = async () => {
-      if (!user) {
-        setPendingOnboarding(null);
-        return;
-      }
+    let active = true;
 
+    const loadFlag = async () => {
       const value = await readShouldShowOnboardingFlag();
-      setPendingOnboarding(value);
+      if (active) {
+        setPendingOnboarding(value);
+      }
     };
 
     loadFlag();
-  }, [user]);
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     return subscribeShouldShowOnboardingFlag((value) => {
@@ -258,12 +239,12 @@ function RootLayoutInner() {
   }, []);
 
   const shouldShowOnboarding = useMemo(() => {
-    if (!user) {
-      return true;
-    }
-
     if (pendingOnboarding !== null) {
       return pendingOnboarding;
+    }
+
+    if (!user) {
+      return true;
     }
 
     const creationTime = user.metadata?.creationTime;
@@ -278,6 +259,7 @@ function RootLayoutInner() {
 
   const isInOnboarding = pathname?.startsWith('/onboarding') ?? false;
   const isInTabs = pathname?.startsWith('/(tabs)') ?? false;
+  const isInAuth = pathname?.startsWith('/auth') ?? false;
 
   useEffect(() => {
     if (!pathname) {
@@ -304,22 +286,14 @@ function RootLayoutInner() {
       return;
     }
 
-    if (!user) {
-      if (!isInOnboarding) {
-        void recordNavigationEvent({ path: '/onboarding', action: 'redirect_missing_user', meta: { previousPath: pathname ?? '(unknown)' } });
-        router.replace('/onboarding');
-      }
-      return;
-    }
-
     if (rcLoading) {
       return;
     }
 
     if (shouldShowOnboarding) {
-      if (!isInOnboarding) {
-        void recordNavigationEvent({ path: '/onboarding/sobriety-card', action: 'redirect_needs_onboarding', meta: { previousPath: pathname ?? '(unknown)' } });
-        router.replace('/onboarding/sobriety-card');
+      if (!isInOnboarding && !isInAuth) {
+        void recordNavigationEvent({ path: '/onboarding', action: 'redirect_needs_onboarding', meta: { previousPath: pathname ?? '(unknown)' } });
+        router.replace('/onboarding');
       }
       return;
     }
@@ -331,7 +305,7 @@ function RootLayoutInner() {
     }
 
     // Plus de redirection globale : on laisse les �crans modaux vivre leur vie.
-  }, [user, loading, rcLoading, fontsLoaded, showSplash, shouldShowOnboarding, pathname, isInOnboarding, isInTabs]);
+  }, [loading, rcLoading, fontsLoaded, showSplash, shouldShowOnboarding, pathname, isInOnboarding, isInTabs, isInAuth]);
 
   if (!fontsLoaded && !fontError) {
     return null;

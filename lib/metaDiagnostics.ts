@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import { AppEventsLogger, Settings } from 'react-native-fbsdk-next';
+import { AppEventsLogger } from 'react-native-fbsdk-next';
 
 let alreadyRan = false;
 
@@ -16,11 +16,8 @@ export async function initMetaDiagnostics() {
 
   try {
     console.log('[MetaDiagnostics] Platform:', Platform.OS);
-    console.log('[MetaDiagnostics] getAppID():', Settings.getAppID?.());
-    const clientToken = (Settings as any)?.getClientToken?.();
-    console.log('[MetaDiagnostics] getClientToken():', clientToken);
   } catch (error) {
-    console.warn('[MetaDiagnostics] Failed to log appId/clientToken', error);
+    console.warn('[MetaDiagnostics] Failed to log platform', error);
   }
 
   try {
