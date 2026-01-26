@@ -2,7 +2,7 @@
   "expo": {
     "name": "Sobre",
     "slug": "sobre-recovery-app",
-    "version": "1.0.8",
+    "version": "1.0.9",
     "orientation": "portrait",
     "scheme": "sobre",
     "icon": "./assets/images/icon.png",
@@ -19,14 +19,64 @@
     },
     "ios": {
       "bundleIdentifier": "com.balthazar.sobre",
-      "buildNumber": "56",
+      "buildNumber": "58",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSPhotoLibraryUsageDescription": "Nous avons besoin d'accéder à votre galerie pour que vous puissiez choisir une photo de profil.",
         "NSPhotoLibraryAddUsageDescription": "Nous avons besoin d'enregistrer votre photo de profil dans votre galerie.",
         "NSCameraUsageDescription": "Nous avons besoin d'accéder à votre appareil photo si vous souhaitez prendre une photo de profil.",
         "NSMicrophoneUsageDescription": "Nous avons besoin d'accéder au microphone pour utiliser certaines fonctionnalités vidéo en situation d'urgence.",
-        "NSUserTrackingUsageDescription": "Cette autorisation nous aide a optimiser nos campagnes publicitaires iOS tout en respectant votre vie privee."
+        "NSUserTrackingUsageDescription": "Cette autorisation nous aide a optimiser nos campagnes publicitaires iOS tout en respectant votre vie privee.",
+        "SKAdNetworkItems": [
+          {
+            "SKAdNetworkIdentifier": "v9wttpbfk9.skadnetwork"
+          },
+          {
+            "SKAdNetworkIdentifier": "n38lu8286q.skadnetwork"
+          },
+          {
+            "SKAdNetworkIdentifier": "n33pv3393q.skadnetwork"
+          },
+          {
+            "SKAdNetworkIdentifier": "3sh42y64q3.skadnetwork"
+          },
+          {
+            "SKAdNetworkIdentifier": "f73kdq92p3.skadnetwork"
+          },
+          {
+            "SKAdNetworkIdentifier": "cstr6suwn9.skadnetwork"
+          },
+          {
+            "SKAdNetworkIdentifier": "ludvb6z3bs.skadnetwork"
+          },
+          {
+            "SKAdNetworkIdentifier": "ppxm28t8ap.skadnetwork"
+          },
+          {
+            "SKAdNetworkIdentifier": "tl55sbb4fm.skadnetwork"
+          },
+          {
+            "SKAdNetworkIdentifier": "7ug5zh24hu.skadnetwork"
+          },
+          {
+            "SKAdNetworkIdentifier": "prcb7njmu6.skadnetwork"
+          },
+          {
+            "SKAdNetworkIdentifier": "mlmmfzh3r3.skadnetwork"
+          },
+          {
+            "SKAdNetworkIdentifier": "5a6flpkh64.skadnetwork"
+          },
+          {
+            "SKAdNetworkIdentifier": "kbd757ywx3.skadnetwork"
+          },
+          {
+            "SKAdNetworkIdentifier": "e5fvkxwrpn.skadnetwork"
+          },
+          {
+            "SKAdNetworkIdentifier": "8s468mfl3y.skadnetwork"
+          }
+        ]
       }
     },
     "android": {
@@ -72,7 +122,7 @@
         }
       ]
     ],
-    "runtimeVersion": "1.0.8",
+    "runtimeVersion": "1.0.9",
     "updates": {
       "url": "https://u.expo.dev/a4b4b61a-1ab3-4a6d-a0f4-7cf9a6becee1"
     }

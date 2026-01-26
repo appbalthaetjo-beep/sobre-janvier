@@ -14,7 +14,8 @@ export function initMetaSdk() {
     }
 
     Settings.setAutoLogAppEventsEnabled?.(false);
-    Settings.setAdvertiserIDCollectionEnabled?.(true);
+    Settings.setAdvertiserIDCollectionEnabled?.(false);
+    Settings.setAdvertiserTrackingEnabled?.(false);
 
     const appId = Settings.getAppID?.();
     console.log('[MetaSDK] Settings.getAppID()', appId);

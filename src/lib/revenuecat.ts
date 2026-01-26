@@ -4,7 +4,6 @@ import Constants from 'expo-constants';
 import Purchases, { CustomerInfo } from 'react-native-purchases';
 import PurchasesUI, { PAYWALL_RESULT } from 'react-native-purchases-ui';
 import { promoEvents } from './analytics';
-import { syncRevenueCatFacebookAnonId } from './metaAttribution';
 import { capturePostHogEvent } from './posthog';
 
 const APP_OWNERSHIP = Constants?.appOwnership ?? 'unknown';
@@ -180,13 +179,7 @@ export async function initRevenueCat(userId?: string): Promise<boolean> {
       });
       purchasesConfigured = true;
       didConfigure = true;
-      console.log('RevenueCat configured successfully');
-
-      try {
-        await syncRevenueCatFacebookAnonId();
-      } catch (syncError) {
-        console.warn('[RevenueCat] Failed to sync FB anonymous ID', syncError);
-      }
+      console.log('[RevenueCat] configure ok');
 
       return true;
     } catch (error) {

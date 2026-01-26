@@ -23,7 +23,9 @@ async function ensureFacebookInitialized(trackingStatus: string | null) {
     Settings.initializeSDK?.();
 
     if (trackingStatus) {
-      await Settings.setAdvertiserTrackingEnabled(trackingStatus === 'granted');
+      const enabled = trackingStatus === 'granted';
+      await Settings.setAdvertiserTrackingEnabled(enabled);
+      Settings.setAdvertiserIDCollectionEnabled?.(enabled);
     }
 
     facebookInitialized = true;
@@ -41,7 +43,9 @@ async function applyAdvertiserTrackingPreference(status: string | null) {
 
   try {
     await ensureFacebookInitialized(status);
-    await Settings.setAdvertiserTrackingEnabled(status === 'granted');
+    const enabled = status === 'granted';
+    await Settings.setAdvertiserTrackingEnabled(enabled);
+    Settings.setAdvertiserIDCollectionEnabled?.(enabled);
   } catch (error) {
     console.warn('[MetaEvents] Failed to sync advertiser tracking preference', error);
   }

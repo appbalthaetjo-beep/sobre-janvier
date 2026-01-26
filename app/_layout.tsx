@@ -64,6 +64,11 @@ const ONBOARDING_STEP_MAP = ONBOARDING_STEPS.reduce<Record<string, { step: numbe
   },
   {},
 );
+const WELCOME_STEP = ONBOARDING_STEP_MAP['/onboarding/index'];
+if (WELCOME_STEP) {
+  ONBOARDING_STEP_MAP['/onboarding'] = WELCOME_STEP;
+  ONBOARDING_STEP_MAP['/onboarding/'] = WELCOME_STEP;
+}
 
 SplashScreen.preventAutoHideAsync();
 
@@ -88,7 +93,9 @@ function RootLayoutInner() {
     (async () => {
       console.log('[META] exports', { initMetaOnce: typeof initMetaOnce, sendMetaTestEvent: typeof sendMetaTestEvent });
       await initMetaOnce();
-      await sendMetaTestEvent();
+      if (__DEV__) {
+        await sendMetaTestEvent();
+      }
     })().catch((error) => {
       console.warn('[META] init failed', error);
     });
@@ -266,6 +273,8 @@ function RootLayoutInner() {
       return;
     }
 
+    const normalizedPath = pathname.replace(/\/+$/, '');
+
     void recordNavigationEvent({
       path: pathname,
       action: 'focus',
@@ -273,9 +282,22 @@ function RootLayoutInner() {
     });
 
     if (pathname.startsWith('/onboarding')) {
-      const match = ONBOARDING_STEP_MAP[pathname];
+      const match = ONBOARDING_STEP_MAP[normalizedPath];
       if (match) {
+        if (__DEV__) {
+          console.log('[PostHog] onboarding_screen_viewed', {
+            pathname,
+            normalizedPath,
+            step: match.step,
+            screen_name: match.screen_name,
+          });
+        }
         void trackOnboardingScreen(match);
+      } else if (__DEV__) {
+        console.log('[PostHog] onboarding_screen_viewed: no match', {
+          pathname,
+          normalizedPath,
+        });
       }
     }
   }, [pathname, isInTabs, isInOnboarding]);
@@ -326,7 +348,6 @@ function RootLayoutInner() {
           <Stack.Screen name="auth/login" />
           <Stack.Screen name="auth/signup" />
           <Stack.Screen name="onboarding/index" />
-          <Stack.Screen name="onboarding/auth" />
           <Stack.Screen name="onboarding/story" />
           <Stack.Screen name="onboarding/sobriety-card" />
           <Stack.Screen name="onboarding/question-1" />

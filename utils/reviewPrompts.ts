@@ -4,6 +4,7 @@ import { AppState, Linking, Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { requestFeedback } from '@/utils/feedback';
 import { USE_SUPABASE_AUTH } from '@/lib/auth/authConfig';
+import { APP_STORE_ID } from '@/constants/appStore';
 import { getCurrentUser } from '@/lib/auth/supabaseAuth';
 
 type ReviewTrigger = 'milestone7' | 'missions2';
@@ -17,7 +18,7 @@ interface ReviewState {
 
 const STORAGE_PREFIX = 'reviewPromptState_v1';
 const COOLDOWN_DAYS = 30;
-const APPLE_ID = process.env.EXPO_PUBLIC_APPLE_APP_ID;
+const APPLE_ID = APP_STORE_ID;
 
 async function getActiveUid(): Promise<string | null> {
   if (USE_SUPABASE_AUTH) {
