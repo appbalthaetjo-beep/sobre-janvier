@@ -13,12 +13,14 @@ type OpenBlockPickerButtonProps = {
   style?: StyleProp<ViewStyle>;
   textStyle?: StyleProp<TextStyle>;
   iconColor?: string;
+  onSelectionChange?: (selection: SerializedSelection | null) => void;
 };
 
 export default function OpenBlockPickerButton({
   style,
   textStyle,
   iconColor = '#000000',
+  onSelectionChange,
 }: OpenBlockPickerButtonProps) {
   const [selection, setSelection] = React.useState<SerializedSelection | null>(null);
   const [loading, setLoading] = React.useState(false);
@@ -29,11 +31,12 @@ export default function OpenBlockPickerButton({
       const saved = await getSavedSelection();
       if (saved) {
         setSelection(saved);
+        onSelectionChange?.(saved);
       }
     } catch (error) {
       console.log('[FamilyControls] Failed to load saved selection:', error);
     }
-  }, []);
+  }, [onSelectionChange]);
 
   React.useEffect(() => {
     loadSavedSelection();
@@ -58,6 +61,7 @@ export default function OpenBlockPickerButton({
 
       const result = await openFamilyActivityPicker();
       setSelection(result);
+      onSelectionChange?.(result);
     } catch (error: any) {
       console.log('[FamilyControls] Picker error:', error);
       Alert.alert('Family Controls', error?.message ?? 'Erreur lors de la sélection.');

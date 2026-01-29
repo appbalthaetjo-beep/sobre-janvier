@@ -9,11 +9,19 @@ export type SerializedSelection = {
   webDomainsCount: number;
 };
 
+export type AppliedShieldResult = {
+  appsCount: number;
+  categoriesCount: number;
+  webDomainsCount: number;
+};
+
 type ExpoFamilyControlsModule = {
   requestAuthorization(): Promise<AuthorizationStatus>;
   getAuthorizationStatus(): Promise<AuthorizationStatus>;
   openFamilyActivityPicker(): Promise<SerializedSelection>;
   getSavedSelection(): Promise<SerializedSelection | null>;
+  applyShieldFromSavedSelection(): Promise<AppliedShieldResult>;
+  clearShield(): Promise<boolean>;
 };
 
 const ExpoFamilyControls = requireNativeModule<ExpoFamilyControlsModule>('ExpoFamilyControls');
@@ -32,6 +40,14 @@ export async function openFamilyActivityPicker(): Promise<SerializedSelection> {
 
 export async function getSavedSelection(): Promise<SerializedSelection | null> {
   return ExpoFamilyControls.getSavedSelection();
+}
+
+export async function applyShieldFromSavedSelection(): Promise<AppliedShieldResult> {
+  return ExpoFamilyControls.applyShieldFromSavedSelection();
+}
+
+export async function clearShield(): Promise<boolean> {
+  return ExpoFamilyControls.clearShield();
 }
 
 export type { AuthorizationStatus };

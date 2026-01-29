@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useReducer } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, StatusBar, Dimensions, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, StatusBar, Dimensions, Image, Alert } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -16,6 +16,12 @@ import OpenBlockPickerButton from '@/components/OpenBlockPickerButton';
 import { scheduleDay7Prompt } from '@/utils/reviewPrompts';
 import { readSobrietyDataForCurrentUser, writeSobrietyBundleForCurrentUser } from '@/utils/sobrietyStorage';
 import { getIdentityDebugInfo } from '@/utils/publicUser';
+import {
+  applyShieldFromSavedSelection,
+  clearShield,
+  getSavedSelection,
+  type SerializedSelection,
+} from 'expo-family-controls';
 
 const { width } = Dimensions.get('window');
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -37,6 +43,8 @@ export default function HomeScreen() {
   const [currentMilestone, setCurrentMilestone] = useState(null);
   const milestoneTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reviewTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [familySelection, setFamilySelection] = useState<SerializedSelection | null>(null);
+  const [shieldBusy, setShieldBusy] = useState(false);
 
   const milestones = [
     { day: 1, title: "Allumage", image: "https://i.imgur.com/I0CDkDl.png" },
@@ -148,6 +156,55 @@ export default function HomeScreen() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const loadSelection = async () => {
+      try {
+        const saved = await getSavedSelection();
+        if (active) {
+          setFamilySelection(saved ?? null);
+        }
+      } catch (error) {
+        console.log('[FamilyControls] Failed to load selection:', error);
+      }
+    };
+    loadSelection();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleApplyShield = async () => {
+    if (shieldBusy) return;
+    setShieldBusy(true);
+    try {
+      const result = await applyShieldFromSavedSelection();
+      Alert.alert(
+        'Blocage activé',
+        `Apps: ${result.appsCount}\nCatégories: ${result.categoriesCount}\nWeb: ${result.webDomainsCount}`
+      );
+    } catch (error: any) {
+      console.log('[FamilyControls] Apply shield error:', error);
+      Alert.alert('Blocage', error?.message ?? 'Impossible d’activer le blocage.');
+    } finally {
+      setShieldBusy(false);
+    }
+  };
+
+  const handleClearShield = async () => {
+    if (shieldBusy) return;
+    setShieldBusy(true);
+    try {
+      await clearShield();
+      Alert.alert('Blocage désactivé', 'Le blocage a été retiré.');
+    } catch (error: any) {
+      console.log('[FamilyControls] Clear shield error:', error);
+      Alert.alert('Blocage', error?.message ?? 'Impossible de désactiver le blocage.');
+    } finally {
+      setShieldBusy(false);
+    }
+  };
   const loadData = useCallback(async () => {
     try {
       const { data: firestoreSobrietyData } = await loadSobrietyData();
@@ -364,7 +421,30 @@ export default function HomeScreen() {
             <OpenBlockPickerButton
               style={styles.blockSitesButton}
               textStyle={styles.blockSitesText}
+              onSelectionChange={setFamilySelection}
             />
+            {familySelection?.applicationsCount ? (
+              <View style={styles.shieldActions}>
+                <TouchableOpacity
+                  style={[styles.shieldActionButton, styles.shieldActionPrimary]}
+                  onPress={handleApplyShield}
+                  disabled={shieldBusy}
+                >
+                  <Text style={styles.shieldActionTextPrimary}>
+                    {shieldBusy ? 'Activation...' : 'Activer le blocage'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.shieldActionButton, styles.shieldActionSecondary]}
+                  onPress={handleClearShield}
+                  disabled={shieldBusy}
+                >
+                  <Text style={styles.shieldActionTextSecondary}>
+                    {shieldBusy ? '...' : 'Désactiver'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
           </View>
 
         </ScrollView>
@@ -652,6 +732,39 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     color: '#000000',
     marginLeft: 8,
+  },
+  shieldActions: {
+    marginTop: 12,
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'center',
+  },
+  shieldActionButton: {
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    minWidth: 140,
+    alignItems: 'center',
+  },
+  shieldActionPrimary: {
+    backgroundColor: '#1A1A1A',
+    borderWidth: 1,
+    borderColor: '#FFD700',
+  },
+  shieldActionSecondary: {
+    backgroundColor: '#1A1A1A',
+    borderWidth: 1,
+    borderColor: '#444444',
+  },
+  shieldActionTextPrimary: {
+    color: '#FFD700',
+    fontSize: 13,
+    fontFamily: 'Inter-SemiBold',
+  },
+  shieldActionTextSecondary: {
+    color: '#DDDDDD',
+    fontSize: 13,
+    fontFamily: 'Inter-SemiBold',
   },
 
   // Bouton d'urgence permanent
