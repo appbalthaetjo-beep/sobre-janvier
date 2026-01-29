@@ -101,6 +101,27 @@ Cordialement`);
     router.push('/debug/billing');
   };
 
+  const handleFamilyControlsTest = async () => {
+    if (Platform.OS !== 'ios') {
+      Alert.alert('Family Controls', 'Test disponible uniquement sur iOS.');
+      return;
+    }
+
+    try {
+      const { requestAuthorization, getAuthorizationStatus } = await import('expo-family-controls');
+      const requestStatus = await requestAuthorization();
+      const currentStatus = await getAuthorizationStatus();
+      console.log('[FamilyControls] requestAuthorization:', requestStatus, 'getAuthorizationStatus:', currentStatus);
+      Alert.alert(
+        'Family Controls',
+        `requestAuthorization: ${requestStatus}\ngetAuthorizationStatus: ${currentStatus}`
+      );
+    } catch (error: any) {
+      console.log('[FamilyControls] Error:', error);
+      Alert.alert('Family Controls', error?.message ?? 'Module indisponible.');
+    }
+  };
+
   const handleRestoreProgress = () => {
     setRestoreEmail('');
     setRestoreMessage(null);
@@ -181,6 +202,13 @@ Cordialement`);
       icon: HelpCircle,
       action: handleBillingDebug,
       description: 'Tester les prix et l\'éligibilité'
+    });
+    settingsItems.push({
+      id: 'family-controls-test',
+      title: 'Family Controls (Test)',
+      icon: Shield,
+      action: handleFamilyControlsTest,
+      description: 'Demander l\'autorisation et lire le statut'
     });
   }
 

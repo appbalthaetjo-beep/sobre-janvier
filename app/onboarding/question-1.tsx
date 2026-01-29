@@ -7,7 +7,6 @@ export default function Question1Screen() {
   const choices = [
     { id: 'masculin', label: 'Masculin' },
     { id: 'feminin', label: 'Féminin' },
-    { id: 'non-binaire', label: 'Non-binaire' },
   ];
 
   return (

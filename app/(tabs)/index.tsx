@@ -11,7 +11,8 @@ import DailyMissions from '@/components/DailyMissions';
 import { t } from '@/src/i18n/strings';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
-import { Calendar, Book, Heart, RotateCcw, Share, Shield, Target, TrendingUp, TriangleAlert as AlertTriangle } from 'lucide-react-native';
+import { Calendar, Book, Heart, RotateCcw, Share, Target, TrendingUp, TriangleAlert as AlertTriangle } from 'lucide-react-native';
+import OpenBlockPickerButton from '@/components/OpenBlockPickerButton';
 import { scheduleDay7Prompt } from '@/utils/reviewPrompts';
 import { readSobrietyDataForCurrentUser, writeSobrietyBundleForCurrentUser } from '@/utils/sobrietyStorage';
 import { getIdentityDebugInfo } from '@/utils/publicUser';
@@ -359,14 +360,11 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Bouton bloquer sites */}
-            <TouchableOpacity 
+            {/* Bouton bloquer apps */}
+            <OpenBlockPickerButton
               style={styles.blockSitesButton}
-              onPress={() => router.push('/site-blocking')}
-            >
-              <Shield size={20} color="#000000" />
-              <Text style={styles.blockSitesText}>Mode sécurisé / Blocage des sites</Text>
-            </TouchableOpacity>
+              textStyle={styles.blockSitesText}
+            />
           </View>
 
         </ScrollView>

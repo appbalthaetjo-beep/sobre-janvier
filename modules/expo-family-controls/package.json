@@ -1,0 +1,15 @@
+{
+  "name": "expo-family-controls",
+  "version": "0.1.0",
+  "description": "Expo module for iOS FamilyControls AuthorizationCenter",
+  "main": "src/index.ts",
+  "keywords": [
+    "expo",
+    "react-native",
+    "family-controls"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "expo-modules-core": "*"
+  }
+}
