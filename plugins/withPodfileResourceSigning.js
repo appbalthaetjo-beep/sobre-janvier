@@ -6,18 +6,36 @@ const TEAM_ID = 'CTJ238754P';
 function buildFixBlock(teamId) {
   return `
   # ${SENTINEL}
-  [
-    installer.pods_project,
-    *installer.generated_projects
-  ].compact.each do |project|
+  puts "SOBRE_PODFILE_PATCH_APPLIED"
+  puts "SOBRE_PATCH_TEAM=${teamId}"
+
+  apply_signing_patch = lambda do |config|
+    config.build_settings['DEVELOPMENT_TEAM'] = '${teamId}'
+    config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
+    config.build_settings['CODE_SIGNING_REQUIRED'] = 'NO'
+    config.build_settings['CODE_SIGNING_IDENTITY'] = ''
+    config.build_settings['EXPANDED_CODE_SIGN_IDENTITY'] = ''
+    config.build_settings['PROVISIONING_PROFILE_SPECIFIER'] = ''
+    config.build_settings['PROVISIONING_PROFILE'] = ''
+  end
+
+  apply_project_patch = lambda do |project|
+    project.build_configurations.each do |config|
+      apply_signing_patch.call(config)
+    end
+  end
+
+  apply_target_patch = lambda do |target|
+    target.build_configurations.each do |config|
+      apply_signing_patch.call(config)
+    end
+  end
+
+  [installer.pods_project, *installer.generated_projects].compact.each do |project|
+    apply_project_patch.call(project)
     project.targets.each do |target|
       if target.respond_to?(:product_type) && target.product_type == "com.apple.product-type.bundle"
-        target.build_configurations.each do |config|
-          config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
-          config.build_settings['CODE_SIGNING_REQUIRED'] = 'NO'
-          config.build_settings['CODE_SIGNING_IDENTITY'] = ''
-          config.build_settings['DEVELOPMENT_TEAM'] = '${teamId}'
-        end
+        apply_target_patch.call(target)
         puts "SOBRE_BUNDLE_TEAM_APPLIED: #{target.name}"
       end
     end
@@ -33,12 +51,12 @@ module.exports = function withPodfileResourceSigning(config) {
     }
 
     const FIX_BLOCK = buildFixBlock(TEAM_ID);
+    const postInstallRegex = /post_install do\s*\|installer\|/m;
 
-    const postInstallRegex = /post_install do\\s*\\|installer\\|/m;
     if (postInstallRegex.test(contents)) {
       config.modResults.contents = contents.replace(postInstallRegex, (match) => `${match}\n${FIX_BLOCK}\n`);
-      return config;
     }
+
     return config;
   });
 };

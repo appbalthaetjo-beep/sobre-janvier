@@ -31,19 +31,6 @@ const REQUIRED_FRAMEWORKS = [
   'FamilyControls.framework',
   'DeviceActivity.framework',
 ];
-const PODFILE_RESOURCE_BUNDLE_FIX = `
-  # Xcode 14+ signs resource bundles by default; disable signing for pod resource bundles
-  installer.target_installation_results.pod_target_installation_results
-    .each do |pod_name, target_installation_result|
-    target_installation_result.resource_bundle_targets.each do |resource_bundle_target|
-      resource_bundle_target.build_configurations.each do |config|
-        config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
-      end
-    end
-  end
-`;
-const PODFILE_RESOURCE_BUNDLE_MARKER = 'CODE_SIGNING_ALLOWED';
-const PODFILE_RESOURCE_BUNDLE_SENTINEL = 'SOBRE_RESOURCE_BUNDLE_SIGNING_PATCH';
 
 function ensureExtensionEntitlements(projectRoot, projectName) {
   const targetDir = path.join(projectRoot, 'ios', projectName);
@@ -259,24 +246,6 @@ module.exports = function withFamilyControls(config) {
       return config;
     },
   ]);
-
-  config = withPodfile(config, (config) => {
-    const contents = config.modResults.contents;
-    if (contents.includes(PODFILE_RESOURCE_BUNDLE_SENTINEL)) {
-      return config;
-    }
-
-    const fixBlock = `\n  # ${PODFILE_RESOURCE_BUNDLE_SENTINEL}\n${PODFILE_RESOURCE_BUNDLE_FIX}`;
-
-    const postInstallRegex = /post_install do\s*\|installer\|/m;
-    if (postInstallRegex.test(contents)) {
-      config.modResults.contents = contents.replace(postInstallRegex, (match) => `${match}${fixBlock}`);
-      return config;
-    }
-
-    config.modResults.contents = `${contents}\npost_install do |installer|${fixBlock}end\n`;
-    return config;
-  });
 
   return withXcodeProject(config, (config) => {
     config.modResults = addExtensionTargets(config, config.modResults);
