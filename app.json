@@ -18,6 +18,7 @@
       }
     },
     "ios": {
+      "appleTeamId": "CTJ238754P",
       "bundleIdentifier": "com.balthazar.sobre",
       "buildNumber": "58",
       "infoPlist": {
