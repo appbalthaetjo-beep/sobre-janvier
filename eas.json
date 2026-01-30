@@ -14,7 +14,7 @@
         "SUPPRESS_XCODE_OUTPUT": "0"
       },
       "ios": {
-        "image": "macos-ventura-13.6-xcode-15.4"
+        "image": "macos-ventura-13.6-xcode-15.1"
       }
     },
     "preview": {
