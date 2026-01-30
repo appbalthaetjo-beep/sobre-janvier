@@ -11,10 +11,10 @@
       "developmentClient": true,
       "env": {
         "APP_ENV": "development",
-        "SUPPRESS_XCODE_OUTPUT": "false"
+        "SUPPRESS_XCODE_OUTPUT": "0"
       },
       "ios": {
-        "image": "macos-12.4-xcode-13.4.1"
+        "image": "macos-ventura-13.6-xcode-15.0"
       }
     },
     "preview": {
