@@ -34,8 +34,8 @@ function buildFixBlock(teamId) {
   [installer.pods_project, *installer.generated_projects].compact.each do |project|
     apply_project_patch.call(project)
     project.targets.each do |target|
+      apply_target_patch.call(target)
       if target.respond_to?(:product_type) && target.product_type == "com.apple.product-type.bundle"
-        apply_target_patch.call(target)
         puts "SOBRE_BUNDLE_TEAM_APPLIED: #{target.name}"
       end
     end

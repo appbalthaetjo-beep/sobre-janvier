@@ -10,7 +10,11 @@
       "channel": "development",
       "developmentClient": true,
       "env": {
-        "APP_ENV": "development"
+        "APP_ENV": "development",
+        "SUPPRESS_XCODE_OUTPUT": "false"
+      },
+      "ios": {
+        "image": "macos-12.4-xcode-13.4.1"
       }
     },
     "preview": {
