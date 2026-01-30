@@ -44,6 +44,7 @@ function buildFixBlock(teamId) {
 }
 
 module.exports = function withPodfileResourceSigning(config) {
+  console.log('[withPodfileResourceSigning] applying Podfile signing patch');
   return withPodfile(config, (config) => {
     const contents = config.modResults.contents;
     if (contents.includes(SENTINEL)) {

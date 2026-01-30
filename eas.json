@@ -11,7 +11,8 @@
       "developmentClient": true,
       "env": {
         "APP_ENV": "development",
-        "SUPPRESS_XCODE_OUTPUT": "0"
+        "SUPPRESS_XCODE_OUTPUT": "false",
+        "EXPO_DEBUG": "1"
       },
       "ios": {
         "image": "macos-ventura-13.6-xcode-15.1"
