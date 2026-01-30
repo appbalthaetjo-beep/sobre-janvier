@@ -92,7 +92,9 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "expo-family-controls"
+      "./plugins/withPodfileResourceSigning",
+      "expo-family-controls",
+      "expo-notifications"
     ],
     "runtimeVersion": "1.0.9",
     "updates": {

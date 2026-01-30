@@ -13,6 +13,7 @@ import SplashScreenComponent from '@/components/SplashScreen';
 import { Linking, Platform, View } from 'react-native';
 import GlobalErrorBoundary from '@/components/GlobalErrorBoundary';
 import FeedbackModalHost from '@/components/FeedbackModalHost';
+import * as Notifications from 'expo-notifications';
 import { readShouldShowOnboardingFlag, subscribeShouldShowOnboardingFlag } from '@/utils/onboardingFlag';
 import { recordNavigationEvent } from '@/utils/diagnostics';
 import { trackOnboardingScreen } from '../lib/posthog';
@@ -199,6 +200,42 @@ function RootLayoutInner() {
       } catch (error) {
         console.error('[LINKING] Failed to detach url listener', error);
       }
+    };
+  }, []);
+
+  useEffect(() => {
+    let responseListener: Notifications.Subscription | undefined;
+
+    const setupNotifications = async () => {
+      try {
+        const { status } = await Notifications.requestPermissionsAsync();
+        console.log('[NOTIFICATIONS] permission', status);
+      } catch (error) {
+        console.warn('[NOTIFICATIONS] permission request failed', error);
+      }
+
+      try {
+        const initial = await Notifications.getLastNotificationResponseAsync();
+        const url = initial?.notification?.request?.content?.data?.url as string | undefined;
+        if (url) {
+          Linking.openURL(url).catch((error) => console.warn('[NOTIFICATIONS] openURL failed', error));
+        }
+      } catch (error) {
+        console.warn('[NOTIFICATIONS] initial response failed', error);
+      }
+
+      responseListener = Notifications.addNotificationResponseReceivedListener((response) => {
+        const url = response.notification.request.content.data?.url as string | undefined;
+        if (url) {
+          Linking.openURL(url).catch((error) => console.warn('[NOTIFICATIONS] openURL failed', error));
+        }
+      });
+    };
+
+    setupNotifications();
+
+    return () => {
+      responseListener?.remove();
     };
   }, []);
 

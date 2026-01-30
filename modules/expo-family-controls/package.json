@@ -11,5 +11,10 @@
   "license": "MIT",
   "peerDependencies": {
     "expo-modules-core": "*"
+  },
+  "peerDependenciesMeta": {
+    "expo-modules-core": {
+      "optional": true
+    }
   }
 }
