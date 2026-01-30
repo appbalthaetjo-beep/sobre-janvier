@@ -84,9 +84,11 @@ function addExtensionTargets(config, project) {
 
     const targetUuid = target.uuid;
     ensureBuildPhases(project, targetUuid);
+    dedupeBuildPhases(project, targetUuid, ext.name);
     ensureGroup(project, mainGroupId, ext);
     addSourceFiles(project, targetUuid, ext);
     addFrameworks(project, targetUuid);
+    dedupeBuildPhases(project, targetUuid, ext.name);
     updateBuildSettings(project, targetUuid, ext, projectName, bundleId);
   });
 
@@ -128,14 +130,20 @@ function addSourceFiles(project, targetUuid, ext) {
   if (!groupKey) return;
 
   ext.sources.forEach((sourcePath) => {
-    project.addSourceFile(sourcePath, { target: targetUuid }, groupKey);
+    if (!hasSourceFile(project, targetUuid, sourcePath)) {
+      project.addSourceFile(sourcePath, { target: targetUuid }, groupKey);
+    }
   });
 
   project.addFile(ext.plist, groupKey);
 }
 
 function addFrameworks(project, targetUuid) {
-  project.addBuildPhase(REQUIRED_FRAMEWORKS, 'PBXFrameworksBuildPhase', 'Frameworks', targetUuid);
+  REQUIRED_FRAMEWORKS.forEach((framework) => {
+    if (!hasFramework(project, targetUuid, framework)) {
+      project.addFramework(framework, { target: targetUuid });
+    }
+  });
 }
 
 function getGroupKeyByName(project, name) {
@@ -147,6 +155,70 @@ function getGroupKeyByName(project, name) {
     }
   }
   return null;
+}
+
+function hasSourceFile(project, targetUuid, sourcePath) {
+  const sources = project.pbxSourcesBuildPhaseObj(targetUuid);
+  if (!sources || !sources.files) return false;
+  const buildFiles = project.hash.project.objects['PBXBuildFile'] || {};
+  const fileRefs = project.hash.project.objects['PBXFileReference'] || {};
+  return sources.files.some((entry) => {
+    const buildFile = buildFiles[entry.value];
+    if (!buildFile || !buildFile.fileRef) return false;
+    const ref = fileRefs[buildFile.fileRef];
+    if (!ref || !ref.path) return false;
+    const refPath = String(ref.path).replace(/"/g, '');
+    return refPath === sourcePath;
+  });
+}
+
+function hasFramework(project, targetUuid, frameworkName) {
+  const frameworks = project.pbxFrameworksBuildPhaseObj(targetUuid);
+  if (!frameworks || !frameworks.files) return false;
+  const buildFiles = project.hash.project.objects['PBXBuildFile'] || {};
+  const fileRefs = project.hash.project.objects['PBXFileReference'] || {};
+  return frameworks.files.some((entry) => {
+    const buildFile = buildFiles[entry.value];
+    if (!buildFile || !buildFile.fileRef) return false;
+    const ref = fileRefs[buildFile.fileRef];
+    if (!ref || !ref.path) return false;
+    const refPath = String(ref.path).replace(/"/g, '');
+    return refPath.endsWith(frameworkName);
+  });
+}
+
+function dedupeBuildPhases(project, targetUuid, targetName) {
+  const target = project.pbxNativeTargetSection()[targetUuid];
+  if (!target || !target.buildPhases) return;
+  const phaseTypes = [
+    'PBXFrameworksBuildPhase',
+    'PBXSourcesBuildPhase',
+    'PBXResourcesBuildPhase',
+    'PBXCopyFilesBuildPhase',
+  ];
+  const removed = [];
+
+  const keepByType = new Map();
+  target.buildPhases = target.buildPhases.filter((phaseRef) => {
+    const phaseId = phaseRef.value;
+    const type = phaseTypes.find((t) => project.hash.project.objects[t] && project.hash.project.objects[t][phaseId]);
+    if (!type) return true;
+    if (!keepByType.has(type)) {
+      keepByType.set(type, phaseId);
+      return true;
+    }
+    removed.push({ type, id: phaseId });
+    return false;
+  });
+
+  removed.forEach(({ type, id }) => {
+    delete project.hash.project.objects[type][id];
+    delete project.hash.project.objects[type][`${id}_comment`];
+  });
+
+  if (removed.length > 0) {
+    console.log(`SOBRE_EXT_PHASE_DEDUP: removed ${removed.length} duplicate phases for ${targetName}`);
+  }
 }
 
 function updateBuildSettings(project, targetUuid, ext, projectName, bundleId) {
