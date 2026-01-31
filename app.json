@@ -14,7 +14,27 @@
     },
     "extra": {
       "eas": {
-        "projectId": "a4b4b61a-1ab3-4a6d-a0f4-7cf9a6becee1"
+        "projectId": "a4b4b61a-1ab3-4a6d-a0f4-7cf9a6becee1",
+        "build": {
+          "experimental": {
+            "ios": {
+              "appExtensions": [
+                {
+                  "targetName": "DeviceActivityMonitorExtension",
+                  "bundleIdentifier": "com.balthazar.sobre.deviceactivitymonitor"
+                },
+                {
+                  "targetName": "ShieldConfigurationExtension",
+                  "bundleIdentifier": "com.balthazar.sobre.shieldconfiguration"
+                },
+                {
+                  "targetName": "ShieldActionExtension",
+                  "bundleIdentifier": "com.balthazar.sobre.shieldaction"
+                }
+              ]
+            }
+          }
+        }
       }
     },
     "ios": {
@@ -95,7 +115,8 @@
     "plugins": [
       "./plugins/withPodfileResourceSigning",
       "expo-family-controls",
-      "expo-notifications"
+      "expo-notifications",
+      "expo-router"
     ],
     "runtimeVersion": "1.0.9",
     "updates": {

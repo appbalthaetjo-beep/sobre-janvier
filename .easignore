@@ -1,12 +1,25 @@
-node_modules
-.expo
-.expo-shared
-ios/Pods
-ios/build
-android/.gradle
-android/app/build
+# Based on .gitignore — controls what EAS uploads
+.env
+.env.local
+node_modules/
+.expo-shared/
+android/
+ios/
+android/.gradle/
+android/app/build/
+ios/Pods/
+ios/build/
 *.log
 *.tmp
 *.lock
-/ios
-/android
+*.odl
+*.ldb
+AppData/
+AppData/Local/Microsoft/OneDrive/
+AppData/Local/Temp/
+.expo/
+expo-env.d.ts
+
+# Ensure local family-controls iOS extensions are shipped to EAS
+!modules/expo-family-controls/ios/
+!modules/expo-family-controls/ios/**

@@ -7,22 +7,22 @@ const EXTENSIONS = [
   {
     name: 'ShieldConfigurationExtension',
     groupPath: '../modules/expo-family-controls/ios/ShieldConfigurationExtension',
-    plist: '../modules/expo-family-controls/ios/ShieldConfigurationExtension/Info.plist',
-    sources: ['../modules/expo-family-controls/ios/ShieldConfigurationExtension/ShieldConfigurationExtension.swift'],
+    plist: 'Info.plist',
+    sources: ['ShieldConfigurationExtension.swift'],
     bundleIdSuffix: '.shieldconfiguration',
   },
   {
     name: 'ShieldActionExtension',
     groupPath: '../modules/expo-family-controls/ios/ShieldActionExtension',
-    plist: '../modules/expo-family-controls/ios/ShieldActionExtension/Info.plist',
-    sources: ['../modules/expo-family-controls/ios/ShieldActionExtension/ShieldActionExtension.swift'],
+    plist: 'Info.plist',
+    sources: ['ShieldActionExtension.swift'],
     bundleIdSuffix: '.shieldaction',
   },
   {
     name: 'DeviceActivityMonitorExtension',
     groupPath: '../modules/expo-family-controls/ios/DeviceActivityMonitorExtension',
-    plist: '../modules/expo-family-controls/ios/DeviceActivityMonitorExtension/Info.plist',
-    sources: ['../modules/expo-family-controls/ios/DeviceActivityMonitorExtension/DeviceActivityMonitorExtension.swift'],
+    plist: 'Info.plist',
+    sources: ['DeviceActivityMonitorExtension.swift'],
     bundleIdSuffix: '.deviceactivitymonitor',
   },
 ];
@@ -216,7 +216,8 @@ function updateBuildSettings(project, targetUuid, ext, projectName, bundleId, te
     if (!config.buildSettings || config.buildSettings.PRODUCT_NAME !== `"${ext.name}"`) {
       continue;
     }
-    config.buildSettings.INFOPLIST_FILE = `"${ext.plist}"`;
+    const plistPath = path.join(ext.groupPath, ext.plist);
+    config.buildSettings.INFOPLIST_FILE = `"${plistPath}"`;
     config.buildSettings.PRODUCT_BUNDLE_IDENTIFIER = `"${bundleId}${ext.bundleIdSuffix}"`;
     config.buildSettings.CODE_SIGN_ENTITLEMENTS = `"${projectName}/${ext.name}.entitlements"`;
     config.buildSettings.IPHONEOS_DEPLOYMENT_TARGET = '16.0';

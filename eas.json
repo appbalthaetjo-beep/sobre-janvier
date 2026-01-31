@@ -16,7 +16,8 @@
         "EXPO_DEBUG": "1"
       },
       "ios": {
-        "image": "macos-ventura-13.6-xcode-15.1"
+        "image": "macos-ventura-13.6-xcode-15.1",
+        "credentialsSource": "local"
       }
     },
     "preview": {
@@ -25,6 +26,9 @@
       "channel": "preview",
       "env": {
         "APP_ENV": "preview"
+      },
+      "ios": {
+        "credentialsSource": "local"
       }
     },
     "production": {
@@ -39,7 +43,8 @@
       },
       "ios": {
         "resourceClass": "m-medium",
-        "buildConfiguration": "Release"
+        "buildConfiguration": "Release",
+        "credentialsSource": "local"
       },
       "android": {
         "buildType": "app-bundle"
