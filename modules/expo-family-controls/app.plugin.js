@@ -55,6 +55,7 @@ function ensureExtensionEntitlements(projectRoot, projectName) {
 function addExtensionTargets(config, project) {
   const projectName = config.modRequest.projectName;
   const bundleId = config.ios?.bundleIdentifier;
+  const teamId = config.ios?.appleTeamId;
   if (!projectName || !bundleId) {
     return project;
   }
@@ -76,7 +77,7 @@ function addExtensionTargets(config, project) {
     addSourceFiles(project, targetUuid, ext);
     addFrameworks(project, targetUuid);
     dedupeBuildPhases(project, targetUuid, ext.name);
-    updateBuildSettings(project, targetUuid, ext, projectName, bundleId);
+    updateBuildSettings(project, targetUuid, ext, projectName, bundleId, teamId);
   });
 
   return project;
@@ -208,7 +209,7 @@ function dedupeBuildPhases(project, targetUuid, targetName) {
   }
 }
 
-function updateBuildSettings(project, targetUuid, ext, projectName, bundleId) {
+function updateBuildSettings(project, targetUuid, ext, projectName, bundleId, teamId) {
   const configs = project.pbxXCBuildConfigurationSection();
   for (const key in configs) {
     const config = configs[key];
@@ -220,6 +221,12 @@ function updateBuildSettings(project, targetUuid, ext, projectName, bundleId) {
     config.buildSettings.CODE_SIGN_ENTITLEMENTS = `"${projectName}/${ext.name}.entitlements"`;
     config.buildSettings.IPHONEOS_DEPLOYMENT_TARGET = '16.0';
     config.buildSettings.SWIFT_VERSION = '5.4';
+    if (arguments.length >= 6 && arguments[5]) {
+      config.buildSettings.DEVELOPMENT_TEAM = `"${arguments[5]}"`;
+      config.buildSettings.CODE_SIGN_STYLE = 'Automatic';
+      config.buildSettings.PROVISIONING_PROFILE_SPECIFIER = '""';
+      config.buildSettings.PROVISIONING_PROFILE = '""';
+    }
   }
 }
 

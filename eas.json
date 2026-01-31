@@ -11,7 +11,8 @@
       "developmentClient": true,
       "env": {
         "APP_ENV": "development",
-        "SUPPRESS_XCODE_OUTPUT": "false",
+        "SUPPRESS_XCODE_OUTPUT": "0",
+        "EAS_BUILD_SUPPRESS_XCODE_OUTPUT": "0",
         "EXPO_DEBUG": "1"
       },
       "ios": {
