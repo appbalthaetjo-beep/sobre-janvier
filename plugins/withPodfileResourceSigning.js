@@ -42,10 +42,6 @@ function buildFixBlock(teamId) {
       # (Swift does not accept "-strict-concurrency=none".)
       config.build_settings['SWIFT_STRICT_CONCURRENCY'] = 'minimal'
 
-      # Force Swift 5 language mode for this pod. In Swift 6 language mode,
-      # main-actor isolation violations are treated as errors regardless of strict concurrency setting.
-      config.build_settings['SWIFT_VERSION'] = '5.0'
-
       # Never treat warnings as errors for this pod (Swift + C/ObjC).
       config.build_settings['SWIFT_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
       config.build_settings['GCC_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
@@ -85,10 +81,11 @@ function buildFixBlock(teamId) {
 
       puts "SOBRE_PODS_RELAX_APPLIED: #{target.name} (#{config.name}) " \
            "STRICT_CONCURRENCY=#{config.build_settings['SWIFT_STRICT_CONCURRENCY']} " \
-           "SWIFT_VERSION=#{config.build_settings['SWIFT_VERSION']} " \
            "TREAT_WARNINGS_AS_ERRORS=#{config.build_settings['SWIFT_TREAT_WARNINGS_AS_ERRORS']}"
     end
   end
+
+  puts "SOBRE_PODS_SWIFT_VERSION_OVERRIDE_REMOVED"
 
   # Targeted patch for RevenueCat's EventsManager.swift (reported by the build logs).
   # We avoid changing actor isolation of RevenueCat types; instead we wrap the UIKit calls
