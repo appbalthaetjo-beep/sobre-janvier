@@ -4,6 +4,7 @@ node_modules/
 .expo-shared/
 android/
 ios/
+!modules/expo-family-controls/ios/**
 android/.gradle/
 android/app/build/
 ios/Pods/
