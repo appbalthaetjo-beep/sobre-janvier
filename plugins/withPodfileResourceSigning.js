@@ -31,6 +31,15 @@ function buildFixBlock(teamId) {
     end
   end
 
+  # Relax Swift concurrency checks for RevenueCat (Pods are regenerated on EAS).
+  installer.pods_project.targets.each do |target|
+    next unless target.name == 'RevenueCat'
+    target.build_configurations.each do |config|
+      config.build_settings['SWIFT_STRICT_CONCURRENCY'] = 'minimal'
+      config.build_settings['SWIFT_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
+    end
+  end
+
   [installer.pods_project, *installer.generated_projects].compact.each do |project|
     apply_project_patch.call(project)
     project.targets.each do |target|
