@@ -58,8 +58,6 @@ final class ShieldActionExtension: ShieldActionDelegate {
       case .secondaryButtonPressed:
         defaults.set(Date().timeIntervalSince1970, forKey: sosRequestedAtKey)
         completionHandler(.close)
-      case .close:
-        completionHandler(.close)
       @unknown default:
         completionHandler(.close)
       }
@@ -72,8 +70,6 @@ final class ShieldActionExtension: ShieldActionDelegate {
       sendDailyCheckinNotification(defaults: defaults)
       completionHandler(.defer)
     case .secondaryButtonPressed:
-      completionHandler(.close)
-    case .close:
       completionHandler(.close)
     @unknown default:
       completionHandler(.close)

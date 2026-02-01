@@ -1,6 +1,7 @@
 import Foundation
 import ManagedSettings
 import ManagedSettingsUI
+import UIKit
 
 final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
   private let appGroupSuiteName = "group.com.balthazar.sobre"
@@ -35,10 +36,10 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
       return ShieldConfiguration(
         backgroundBlurStyle: .systemUltraThinMaterialDark,
         icon: .init(systemName: "moon.stars.fill"),
-        title: .init(text: "Mode Nuit activé"),
-        subtitle: .init(text: subtitle),
-        primaryButtonLabel: .init(text: "Continuer quand même"),
-        secondaryButtonLabel: .init(text: "Aide-moi (SOS)")
+        title: .init(text: "Mode Nuit activé", color: .white),
+        subtitle: .init(text: subtitle, color: .white),
+        primaryButtonLabel: .init(text: "Continuer quand même", color: .white),
+        secondaryButtonLabel: .init(text: "Aide-moi (SOS)", color: .white)
       )
     }
 
@@ -54,19 +55,19 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
       return ShieldConfiguration(
         backgroundBlurStyle: .systemUltraThinMaterialDark,
         icon: .init(systemName: "lock.shield"),
-        title: .init(text: "Tes apps sensibles sont verrouillées."),
-        subtitle: .init(text: "Fais ton check-in Sobre pour les déverrouiller aujourd’hui."),
-        primaryButtonLabel: .init(text: primaryLabel)
+        title: .init(text: "Tes apps sensibles sont verrouillées.", color: .white),
+        subtitle: .init(text: "Fais ton check-in Sobre pour les déverrouiller aujourd’hui.", color: .white),
+        primaryButtonLabel: .init(text: primaryLabel, color: .white)
       )
     }
 
     return ShieldConfiguration(
       backgroundBlurStyle: .systemUltraThinMaterialDark,
       icon: .init(systemName: "lock.fill"),
-      title: .init(text: "Accès limité"),
-      subtitle: .init(text: "Cette fonctionnalité est bloquée."),
-      primaryButtonLabel: .init(text: "Fermer"),
-      secondaryButtonLabel: .init(text: "Annuler")
+      title: .init(text: "Accès limité", color: .white),
+      subtitle: .init(text: "Cette fonctionnalité est bloquée.", color: .white),
+      primaryButtonLabel: .init(text: "Fermer", color: .white),
+      secondaryButtonLabel: .init(text: "Annuler", color: .white)
     )
   }
 
