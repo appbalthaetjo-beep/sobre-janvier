@@ -314,38 +314,44 @@ function buildFixBlock(teamId) {
       puts "SOBRE_EXPO_WITHHOSTING_PATCH_MISSING_FILE: #{withhosting_path}"
     end
 
-    # 3) AutoSizingStack.swift: provide a polyfill for onGeometryChange.
+    # 3) AutoSizingStack.swift: provide a Swift 6 compatibility shim for onGeometryChange.
     autosizing_path = File.join(expo_core_root, 'Core', 'Views', 'SwiftUI', 'AutoSizingStack.swift')
     if File.exist?(autosizing_path)
       content = File.read(autosizing_path)
-      if content.include?('SOBRE_EXPO_ONGEOMETRYCHANGE_PATCH')
-        puts "SOBRE_EXPO_ONGEOMETRYCHANGE_PATCH_SKIPPED_ALREADY_PATCHED: #{autosizing_path}"
-      else
-        polyfill = <<~SWIFT_POLYFILL
+      stub = <<~SWIFT_STUB
 
-        // SOBRE_EXPO_ONGEOMETRYCHANGE_PATCH
-        import SwiftUI
+      // SOBRE_EXPO_ONGEOMETRYCHANGE_PATCH
+      import SwiftUI
 
-        extension View {
-          func onGeometryChange<T>(
-            for _: T.Type,
-            of value: @escaping (GeometryProxy) -> T,
-            action: @escaping (T) -> Void
-          ) -> some View {
-            background(
-              GeometryReader { proxy in
-                let v = value(proxy)
-                DispatchQueue.main.async {
-                  action(v)
-                }
-                Color.clear
-              }
-            )
-          }
+      extension View {
+        @inlinable
+        func onGeometryChange<Value>(
+          for _: Value.Type,
+          of _: @escaping (GeometryProxy) -> Value,
+          action _: @escaping (Value) -> Void
+        ) -> some View {
+          // Swift 6 compatibility shim:
+          // On désactive complètement la logique de "geometry change" d'Expo
+          // pour éviter les problèmes de result builder / SwiftUI.
+          self
         }
-        SWIFT_POLYFILL
+      }
+      SWIFT_STUB
 
-        File.write(autosizing_path, content + polyfill)
+      marker = "// SOBRE_EXPO_ONGEOMETRYCHANGE_PATCH"
+
+      if content.include?(marker)
+        # If previously patched with an older implementation, replace the entire patch block.
+        if content.include?("Swift 6 compatibility shim:")
+          puts "SOBRE_EXPO_ONGEOMETRYCHANGE_PATCH_SKIPPED_ALREADY_PATCHED: #{autosizing_path}"
+        else
+          idx = content.index(marker)
+          new_content = content[0...idx - 1].rstrip + stub
+          File.write(autosizing_path, new_content)
+          puts "SOBRE_EXPO_ONGEOMETRYCHANGE_PATCH_APPLIED: #{autosizing_path}"
+        end
+      else
+        File.write(autosizing_path, content + stub)
         puts "SOBRE_EXPO_ONGEOMETRYCHANGE_PATCH_APPLIED: #{autosizing_path}"
       end
     else
