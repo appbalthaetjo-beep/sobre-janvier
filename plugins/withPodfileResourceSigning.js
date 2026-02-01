@@ -31,24 +31,32 @@ function buildFixBlock(teamId) {
     end
   end
 
-  # Relax Swift concurrency checks + ensure "warnings as errors" doesn't break builds for Pods.
+  # Relax Swift concurrency checks + ensure "warnings as errors" doesn't break builds for RevenueCat.
   installer.pods_project.targets.each do |target|
+    # Only touch the RevenueCat pod target.
+    next unless target.name == 'RevenueCat'
+
     target.build_configurations.each do |config|
-      config.build_settings['SWIFT_STRICT_CONCURRENCY'] = 'minimal'
+      # Disable strict concurrency for this pod.
+      config.build_settings['SWIFT_STRICT_CONCURRENCY'] = 'none'
+
+      # Never treat warnings as errors for this pod (Swift + C/ObjC).
       config.build_settings['SWIFT_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
       config.build_settings['GCC_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
 
+      # Remove any flag that forces warnings-as-errors.
       flags = config.build_settings['OTHER_SWIFT_FLAGS']
       if flags.is_a?(String)
-        # Remove token and clean up extra whitespace.
-        config.build_settings['OTHER_SWIFT_FLAGS'] = flags.gsub('-warnings-as-errors', '').split.join(' ')
-      elsif flags.is_a?(Array)
-        config.build_settings['OTHER_SWIFT_FLAGS'] = flags - ['-warnings-as-errors']
+        flags = flags.split(' ')
       end
-    end
+      if flags.is_a?(Array)
+        flags = flags.reject { |f| f.include?('warnings-as-errors') }
+        config.build_settings['OTHER_SWIFT_FLAGS'] = flags
+      end
 
-    if target.name == 'RevenueCat'
-      puts "SOBRE_PODS_RELAX_APPLIED: #{target.name}"
+      puts "SOBRE_PODS_RELAX_APPLIED: #{target.name} (#{config.name}) " \
+           "STRICT_CONCURRENCY=#{config.build_settings['SWIFT_STRICT_CONCURRENCY']} " \
+           "TREAT_WARNINGS_AS_ERRORS=#{config.build_settings['SWIFT_TREAT_WARNINGS_AS_ERRORS']}"
     end
   end
 
