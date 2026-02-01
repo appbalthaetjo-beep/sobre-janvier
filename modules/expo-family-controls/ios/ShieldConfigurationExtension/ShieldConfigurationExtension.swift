@@ -15,15 +15,11 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
     return configurationForCurrentMode()
   }
 
-  override func configuration(shielding application: Application, in category: ActivityCategory) -> ShieldConfiguration {
+  override func configuration(shielding category: ActivityCategory) -> ShieldConfiguration {
     return configurationForCurrentMode()
   }
 
   override func configuration(shielding webDomain: WebDomain) -> ShieldConfiguration {
-    return configurationForCurrentMode()
-  }
-
-  override func configuration(shielding webDomain: WebDomain, in category: ActivityCategory) -> ShieldConfiguration {
     return configurationForCurrentMode()
   }
 
