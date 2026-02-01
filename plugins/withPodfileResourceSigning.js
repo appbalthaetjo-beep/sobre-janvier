@@ -92,7 +92,10 @@ function buildFixBlock(teamId) {
   # Patch RevenueCat sources in Pods to avoid Swift main-actor isolation compile errors on Xcode 17+.
   # This is intentionally idempotent and only touches files that reference begin/endBackgroundTask.
   if installer.pods_project.targets.any? { |t| t.name == 'RevenueCat' }
-    revenuecat_sources_dir = File.join(__dir__, 'Pods', 'RevenueCat', 'Sources')
+    pods_root = installer.sandbox.root.to_s
+    revenuecat_sources_dir = File.join(pods_root, 'RevenueCat', 'Sources')
+    revenuecat_sources_dir = File.join(pods_root, 'Pods', 'RevenueCat', 'Sources') unless Dir.exist?(revenuecat_sources_dir)
+
     if Dir.exist?(revenuecat_sources_dir)
       Dir.glob(File.join(revenuecat_sources_dir, '**', '*.swift')).each do |path|
         content = File.read(path)
@@ -113,7 +116,47 @@ function buildFixBlock(teamId) {
         File.write(path, new_content)
         puts "SOBRE_REVENUECAT_MAINACTOR_PATCH_APPLIED: #{path}"
       end
+    else
+      puts "SOBRE_REVENUECAT_MAINACTOR_PATCH_MISSING_DIR: #{revenuecat_sources_dir}"
     end
+  end
+
+  # Targeted patch for RevenueCat's EventsManager.swift (the file reported by the build logs).
+  # Uses installer.sandbox.root to avoid path issues in EAS environments.
+  begin
+    if installer.pods_project.targets.any? { |t| t.name == 'RevenueCat' }
+      pods_root = installer.sandbox.root.to_s
+      events_manager_path = File.join(pods_root, 'RevenueCat', 'Sources', 'Events', 'EventsManager.swift')
+      events_manager_path = File.join(pods_root, 'Pods', 'RevenueCat', 'Sources', 'Events', 'EventsManager.swift') unless File.exist?(events_manager_path)
+
+      if File.exist?(events_manager_path)
+        content = File.read(events_manager_path)
+
+        unless content.include?('@MainActor')
+          new_content = content.sub(
+            /(^|\\n)(\\s*)((?:(?:public|open|internal|private|fileprivate)\\s+)?(?:(?:final)\\s+)?class\\s+EventsManager\\b)/
+          ) do
+            prefix = Regexp.last_match(1)
+            indent = Regexp.last_match(2)
+            decl = Regexp.last_match(3)
+            "#{prefix}#{indent}@MainActor\\n#{indent}#{decl}"
+          end
+
+          if new_content != content
+            File.write(events_manager_path, new_content)
+            puts "SOBRE_REVENUECAT_MAINACTOR_PATCH_APPLIED: #{events_manager_path}"
+          else
+            puts "SOBRE_REVENUECAT_MAINACTOR_PATCH_SKIPPED_NO_MATCH: #{events_manager_path}"
+          end
+        else
+          puts "SOBRE_REVENUECAT_MAINACTOR_PATCH_SKIPPED_ALREADY_ANNOTATED: #{events_manager_path}"
+        end
+      else
+        puts "SOBRE_REVENUECAT_MAINACTOR_PATCH_MISSING_FILE: #{events_manager_path}"
+      end
+    end
+  rescue => e
+    puts "SOBRE_REVENUECAT_MAINACTOR_PATCH_ERROR: #{e}"
   end
 
   [installer.pods_project, *installer.generated_projects].compact.each do |project|
