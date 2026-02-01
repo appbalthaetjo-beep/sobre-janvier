@@ -31,12 +31,24 @@ function buildFixBlock(teamId) {
     end
   end
 
-  # Relax Swift concurrency checks for RevenueCat (Pods are regenerated on EAS).
+  # Relax Swift concurrency checks + ensure "warnings as errors" doesn't break builds for Pods.
   installer.pods_project.targets.each do |target|
-    next unless target.name == 'RevenueCat'
     target.build_configurations.each do |config|
       config.build_settings['SWIFT_STRICT_CONCURRENCY'] = 'minimal'
       config.build_settings['SWIFT_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
+      config.build_settings['GCC_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
+
+      flags = config.build_settings['OTHER_SWIFT_FLAGS']
+      if flags.is_a?(String)
+        # Remove token and clean up extra whitespace.
+        config.build_settings['OTHER_SWIFT_FLAGS'] = flags.gsub('-warnings-as-errors', '').split.join(' ')
+      elsif flags.is_a?(Array)
+        config.build_settings['OTHER_SWIFT_FLAGS'] = flags - ['-warnings-as-errors']
+      end
+    end
+
+    if target.name == 'RevenueCat'
+      puts "SOBRE_PODS_RELAX_APPLIED: #{target.name}"
     end
   end
 
