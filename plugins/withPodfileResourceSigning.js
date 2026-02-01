@@ -8,6 +8,7 @@ function buildFixBlock(teamId) {
   # ${SENTINEL}
   puts "SOBRE_PODFILE_PATCH_APPLIED"
   puts "SOBRE_PATCH_TEAM=${teamId}"
+  puts "SOBRE_POST_INSTALL_MARKER: running post_install"
 
   apply_signing_patch = lambda do |config|
     config.build_settings['DEVELOPMENT_TEAM'] = '${teamId}'
@@ -89,74 +90,80 @@ function buildFixBlock(teamId) {
     end
   end
 
-  # Patch RevenueCat sources in Pods to avoid Swift main-actor isolation compile errors on Xcode 17+.
-  # This is intentionally idempotent and only touches files that reference begin/endBackgroundTask.
-  if installer.pods_project.targets.any? { |t| t.name == 'RevenueCat' }
-    pods_root = installer.sandbox.root.to_s
-    revenuecat_sources_dir = File.join(pods_root, 'RevenueCat', 'Sources')
-    revenuecat_sources_dir = File.join(pods_root, 'Pods', 'RevenueCat', 'Sources') unless Dir.exist?(revenuecat_sources_dir)
-
-    if Dir.exist?(revenuecat_sources_dir)
-      Dir.glob(File.join(revenuecat_sources_dir, '**', '*.swift')).each do |path|
-        content = File.read(path)
-
-        next unless content.include?('beginBackgroundTask(') || content.include?('endBackgroundTask(')
-        next if content.include?('@MainActor')
-
-        # Insert @MainActor before the first class declaration in the file.
-        new_content = content.sub(/(^|\\n)(\\s*)((?:(?:public|open|internal|private|fileprivate)\\s+)?(?:(?:final)\\s+)?class\\s+)/) do
-          prefix = Regexp.last_match(1)
-          indent = Regexp.last_match(2)
-          decl = Regexp.last_match(3)
-          "#{prefix}#{indent}@MainActor\\n#{indent}#{decl}"
-        end
-
-        next if new_content == content
-
-        File.write(path, new_content)
-        puts "SOBRE_REVENUECAT_MAINACTOR_PATCH_APPLIED: #{path}"
-      end
-    else
-      puts "SOBRE_REVENUECAT_MAINACTOR_PATCH_MISSING_DIR: #{revenuecat_sources_dir}"
-    end
-  end
-
-  # Targeted patch for RevenueCat's EventsManager.swift (the file reported by the build logs).
-  # Uses installer.sandbox.root to avoid path issues in EAS environments.
+  # Targeted patch for RevenueCat's EventsManager.swift (reported by the build logs).
+  # We avoid changing actor isolation of RevenueCat types; instead we wrap the UIKit calls
+  # in a tiny helper that hops onto the MainActor.
   begin
     if installer.pods_project.targets.any? { |t| t.name == 'RevenueCat' }
       pods_root = installer.sandbox.root.to_s
       events_manager_path = File.join(pods_root, 'RevenueCat', 'Sources', 'Events', 'EventsManager.swift')
       events_manager_path = File.join(pods_root, 'Pods', 'RevenueCat', 'Sources', 'Events', 'EventsManager.swift') unless File.exist?(events_manager_path)
 
+      puts "SOBRE_REVENUECAT_MAINACTOR_PATCH_START: pods_root=#{pods_root} events_manager_path=#{events_manager_path}"
+
       if File.exist?(events_manager_path)
         content = File.read(events_manager_path)
 
-        unless content.include?('@MainActor')
-          new_content = content.sub(
-            /(^|\\n)(\\s*)((?:(?:public|open|internal|private|fileprivate)\\s+)?(?:(?:final)\\s+)?class\\s+EventsManager\\b)/
-          ) do
-            prefix = Regexp.last_match(1)
-            indent = Regexp.last_match(2)
-            decl = Regexp.last_match(3)
-            "#{prefix}#{indent}@MainActor\\n#{indent}#{decl}"
-          end
-
-          if new_content != content
-            File.write(events_manager_path, new_content)
-            puts "SOBRE_REVENUECAT_MAINACTOR_PATCH_APPLIED: #{events_manager_path}"
-          else
-            puts "SOBRE_REVENUECAT_MAINACTOR_PATCH_SKIPPED_NO_MATCH: #{events_manager_path}"
-          end
+        if content.include?('SOBRE_REVENUECAT_MAINACTOR_PATCH')
+          puts "SOBRE_REVENUECAT_MAINACTOR_PATCH_SKIPPED_ALREADY_PATCHED: #{events_manager_path}"
         else
-          puts "SOBRE_REVENUECAT_MAINACTOR_PATCH_SKIPPED_ALREADY_ANNOTATED: #{events_manager_path}"
+          new_content = content.dup
+
+          new_content.gsub!(
+            /application\\.beginBackgroundTask\\(\\s*withName:\\s*([^\\)]+)\\)/,
+            'SobreRevenueCatBGTask.begin(application: application, taskName: \\1)'
+          )
+          new_content.gsub!(
+            /application\\.endBackgroundTask\\(\\s*([^\\)]+?)\\s*\\)/,
+            'SobreRevenueCatBGTask.end(application: application, taskID: \\1)'
+          )
+
+          if new_content == content
+            puts "SOBRE_REVENUECAT_MAINACTOR_PATCH_NO_CHANGES: #{events_manager_path}"
+          else
+            helper = <<~SWIFT_HELPER
+
+            // SOBRE_REVENUECAT_MAINACTOR_PATCH
+            private enum SobreRevenueCatBGTask {
+              static func begin(
+                application: UIApplication,
+                taskName: String,
+                expirationHandler: @escaping () -> Void
+              ) -> UIBackgroundTaskIdentifier {
+                if Thread.isMainThread {
+                  return MainActor.assumeIsolated {
+                    application.beginBackgroundTask(withName: taskName, expirationHandler: expirationHandler)
+                  }
+                }
+
+                var id: UIBackgroundTaskIdentifier = .invalid
+                let sema = DispatchSemaphore(value: 0)
+                Task { @MainActor in
+                  id = application.beginBackgroundTask(withName: taskName, expirationHandler: expirationHandler)
+                  sema.signal()
+                }
+                sema.wait()
+                return id
+              }
+
+              static func end(application: UIApplication, taskID: UIBackgroundTaskIdentifier) {
+                Task { @MainActor in
+                  application.endBackgroundTask(taskID)
+                }
+              }
+            }
+            SWIFT_HELPER
+
+            File.write(events_manager_path, new_content + helper)
+            puts "SOBRE_REVENUECAT_MAINACTOR_PATCH_APPLIED: #{events_manager_path}"
+          end
         end
       else
         puts "SOBRE_REVENUECAT_MAINACTOR_PATCH_MISSING_FILE: #{events_manager_path}"
       end
     end
   rescue => e
-    puts "SOBRE_REVENUECAT_MAINACTOR_PATCH_ERROR: #{e}"
+    puts "SOBRE_REVENUECAT_MAINACTOR_PATCH_ERROR: #{e.class} #{e.message}"
   end
 
   [installer.pods_project, *installer.generated_projects].compact.each do |project|
