@@ -100,12 +100,14 @@ function buildFixBlock(teamId) {
       events_manager_path = File.join(pods_root, 'Pods', 'RevenueCat', 'Sources', 'Events', 'EventsManager.swift') unless File.exist?(events_manager_path)
 
       puts "SOBRE_REVENUECAT_MAINACTOR_PATCH_START: pods_root=#{pods_root} events_manager_path=#{events_manager_path}"
+      puts "SOBRE_REVENUECAT_BG_TASK_PATCH_START: pods_root=#{pods_root} events_manager_path=#{events_manager_path}"
 
       if File.exist?(events_manager_path)
         content = File.read(events_manager_path)
 
         if content.include?('SOBRE_REVENUECAT_MAINACTOR_PATCH')
           puts "SOBRE_REVENUECAT_MAINACTOR_PATCH_SKIPPED_ALREADY_PATCHED: #{events_manager_path}"
+          puts "SOBRE_REVENUECAT_BG_TASK_PATCH_SKIPPED_ALREADY_PATCHED: #{events_manager_path}"
         else
           new_content = content.dup
 
@@ -120,9 +122,11 @@ function buildFixBlock(teamId) {
 
           if new_content == content
             puts "SOBRE_REVENUECAT_MAINACTOR_PATCH_NO_CHANGES: #{events_manager_path}"
+            puts "SOBRE_REVENUECAT_BG_TASK_PATCH_NO_CHANGES: #{events_manager_path}"
           else
             helper = <<~SWIFT_HELPER
 
+            // SOBRE_REVENUECAT_BG_TASK_PATCH
             // SOBRE_REVENUECAT_MAINACTOR_PATCH
             private enum SobreRevenueCatBGTask {
               static func begin(
@@ -131,22 +135,23 @@ function buildFixBlock(teamId) {
                 expirationHandler: @escaping () -> Void
               ) -> UIBackgroundTaskIdentifier {
                 if Thread.isMainThread {
-                  return MainActor.assumeIsolated {
-                    application.beginBackgroundTask(withName: taskName, expirationHandler: expirationHandler)
-                  }
+                  return application.beginBackgroundTask(withName: taskName, expirationHandler: expirationHandler)
                 }
 
-                var id: UIBackgroundTaskIdentifier = .invalid
+                let box = Atomic<UIBackgroundTaskIdentifier>(.invalid)
                 let sema = DispatchSemaphore(value: 0)
                 Task { @MainActor in
-                  id = application.beginBackgroundTask(withName: taskName, expirationHandler: expirationHandler)
+                  box.value = application.beginBackgroundTask(withName: taskName, expirationHandler: expirationHandler)
                   sema.signal()
                 }
                 sema.wait()
-                return id
+                return box.value
               }
 
-              static func end(application: UIApplication, taskID: UIBackgroundTaskIdentifier) {
+              static func end(
+                application: UIApplication,
+                taskID: UIBackgroundTaskIdentifier
+              ) {
                 Task { @MainActor in
                   application.endBackgroundTask(taskID)
                 }
@@ -156,14 +161,17 @@ function buildFixBlock(teamId) {
 
             File.write(events_manager_path, new_content + helper)
             puts "SOBRE_REVENUECAT_MAINACTOR_PATCH_APPLIED: #{events_manager_path}"
+            puts "SOBRE_REVENUECAT_BG_TASK_PATCH_APPLIED: #{events_manager_path}"
           end
         end
       else
         puts "SOBRE_REVENUECAT_MAINACTOR_PATCH_MISSING_FILE: #{events_manager_path}"
+        puts "SOBRE_REVENUECAT_BG_TASK_PATCH_MISSING_FILE: #{events_manager_path}"
       end
     end
   rescue => e
     puts "SOBRE_REVENUECAT_MAINACTOR_PATCH_ERROR: #{e.class} #{e.message}"
+    puts "SOBRE_REVENUECAT_BG_TASK_PATCH_ERROR: #{e.class} #{e.message}"
   end
 
   [installer.pods_project, *installer.generated_projects].compact.each do |project|
