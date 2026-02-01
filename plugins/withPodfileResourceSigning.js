@@ -37,21 +37,45 @@ function buildFixBlock(teamId) {
     next unless target.name == 'RevenueCat'
 
     target.build_configurations.each do |config|
-      # Disable strict concurrency for this pod.
-      config.build_settings['SWIFT_STRICT_CONCURRENCY'] = 'none'
+      # Keep concurrency checks permissive, but use a value supported by Swift/Xcode.
+      # (Swift does not accept "-strict-concurrency=none".)
+      config.build_settings['SWIFT_STRICT_CONCURRENCY'] = 'minimal'
 
       # Never treat warnings as errors for this pod (Swift + C/ObjC).
       config.build_settings['SWIFT_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
       config.build_settings['GCC_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
 
-      # Remove any flag that forces warnings-as-errors.
+      # Remove any flag that forces warnings-as-errors, and any invalid strict-concurrency flag.
       flags = config.build_settings['OTHER_SWIFT_FLAGS']
       if flags.is_a?(String)
         flags = flags.split(' ')
       end
       if flags.is_a?(Array)
-        flags = flags.reject { |f| f.include?('warnings-as-errors') }
-        config.build_settings['OTHER_SWIFT_FLAGS'] = flags
+        cleaned = []
+        i = 0
+        while i < flags.length
+          f = flags[i]
+
+          # Driver-level flags (may appear without -Xfrontend).
+          if f.include?('warnings-as-errors') || f.include?('strict-concurrency=none')
+            i += 1
+            next
+          end
+
+          # Frontend flags (paired as: -Xfrontend <flag>).
+          if f == '-Xfrontend' && (i + 1) < flags.length
+            next_flag = flags[i + 1]
+            if next_flag.include?('warnings-as-errors') || next_flag.include?('strict-concurrency=none')
+              i += 2
+              next
+            end
+          end
+
+          cleaned << f
+          i += 1
+        end
+
+        config.build_settings['OTHER_SWIFT_FLAGS'] = cleaned
       end
 
       puts "SOBRE_PODS_RELAX_APPLIED: #{target.name} (#{config.name}) " \
