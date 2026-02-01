@@ -11,15 +11,15 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
   private let dailyUnlockedUntilKey = "dailyUnlockedUntil"
   private let dailyNotifLastSentAtKey = "dailyNotifLastSentAt"
 
-  override func configuration(shielding application: Application) -> ShieldConfiguration {
+  override func configuration(shielding application: Application) -> ShieldConfiguration? {
     return configurationForCurrentMode()
   }
 
-  override func configuration(shielding category: ActivityCategory) -> ShieldConfiguration {
+  override func configuration(shielding category: ActivityCategory) -> ShieldConfiguration? {
     return configurationForCurrentMode()
   }
 
-  override func configuration(shielding webDomain: WebDomain) -> ShieldConfiguration {
+  override func configuration(shielding webDomain: WebDomain) -> ShieldConfiguration? {
     return configurationForCurrentMode()
   }
 
