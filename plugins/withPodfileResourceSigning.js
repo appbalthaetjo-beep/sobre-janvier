@@ -89,6 +89,33 @@ function buildFixBlock(teamId) {
     end
   end
 
+  # Patch RevenueCat sources in Pods to avoid Swift main-actor isolation compile errors on Xcode 17+.
+  # This is intentionally idempotent and only touches files that reference begin/endBackgroundTask.
+  if installer.pods_project.targets.any? { |t| t.name == 'RevenueCat' }
+    revenuecat_sources_dir = File.join(__dir__, 'Pods', 'RevenueCat', 'Sources')
+    if Dir.exist?(revenuecat_sources_dir)
+      Dir.glob(File.join(revenuecat_sources_dir, '**', '*.swift')).each do |path|
+        content = File.read(path)
+
+        next unless content.include?('beginBackgroundTask(') || content.include?('endBackgroundTask(')
+        next if content.include?('@MainActor')
+
+        # Insert @MainActor before the first class declaration in the file.
+        new_content = content.sub(/(^|\n)(\s*)((?:(?:public|open|internal|private|fileprivate)\s+)?(?:(?:final)\s+)?class\s+)/) do
+          prefix = Regexp.last_match(1)
+          indent = Regexp.last_match(2)
+          decl = Regexp.last_match(3)
+          "#{prefix}#{indent}@MainActor\\n#{indent}#{decl}"
+        end
+
+        next if new_content == content
+
+        File.write(path, new_content)
+        puts "SOBRE_REVENUECAT_MAINACTOR_PATCH_APPLIED: #{path}"
+      end
+    end
+  end
+
   [installer.pods_project, *installer.generated_projects].compact.each do |project|
     apply_project_patch.call(project)
     project.targets.each do |target|
