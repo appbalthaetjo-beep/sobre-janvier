@@ -101,7 +101,7 @@ function buildFixBlock(teamId) {
         next if content.include?('@MainActor')
 
         # Insert @MainActor before the first class declaration in the file.
-        new_content = content.sub(/(^|\n)(\s*)((?:(?:public|open|internal|private|fileprivate)\s+)?(?:(?:final)\s+)?class\s+)/) do
+        new_content = content.sub(/(^|\\n)(\\s*)((?:(?:public|open|internal|private|fileprivate)\\s+)?(?:(?:final)\\s+)?class\\s+)/) do
           prefix = Regexp.last_match(1)
           indent = Regexp.last_match(2)
           decl = Regexp.last_match(3)
