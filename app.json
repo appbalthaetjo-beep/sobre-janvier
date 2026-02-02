@@ -115,6 +115,7 @@
     "plugins": [
       "./plugins/withPodfileResourceSigning",
       "expo-family-controls",
+      "./plugins/withScreenTimeBundleIds",
       "expo-notifications",
       "expo-router"
     ],
