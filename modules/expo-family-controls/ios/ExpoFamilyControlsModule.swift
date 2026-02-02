@@ -21,8 +21,11 @@ public final class ExpoFamilyControlsModule: Module {
 
   public func definition() -> ModuleDefinition {
     Name("ExpoFamilyControls")
-    if let defaults = try? appGroupDefaults() {
-      ensureScheduleDefaults(defaults)
+
+    OnCreate {
+      if let defaults = try? appGroupDefaults() {
+        ensureScheduleDefaults(defaults)
+      }
     }
 
     AsyncFunction("requestAuthorization") { () async throws -> String in
