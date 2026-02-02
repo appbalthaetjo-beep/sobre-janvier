@@ -732,6 +732,21 @@ module.exports = function withPodfileResourceSigning(config) {
   config = withXcodeProject(config, (config) => {
     const project = config.modResults;
 
+    const stripWrappingQuotes = (value) => {
+      if (typeof value !== 'string') return value;
+      const s = value.trim();
+      if (s.length >= 2 && ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'")))) {
+        return s.slice(1, -1);
+      }
+      return s;
+    };
+
+    const hasWrappingQuotes = (value) => {
+      if (typeof value !== 'string') return false;
+      const s = value.trim();
+      return s.length >= 2 && ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'")));
+    };
+
     const getNativeTargets = () => {
       const section = project.pbxNativeTargetSection();
       return Object.entries(section)
@@ -781,10 +796,12 @@ module.exports = function withPodfileResourceSigning(config) {
 
     // Build a per-configuration host bundle id map (Debug/Release/etc).
     const hostBundleIdByConfig = {};
+    const hostBundleIdQuotedByConfig = {};
     for (const { name, cfg } of getTargetBuildConfigs(appTarget)) {
       const bundleId = cfg?.buildSettings?.PRODUCT_BUNDLE_IDENTIFIER;
       if (name && typeof bundleId === 'string' && bundleId.length > 0) {
-        hostBundleIdByConfig[name] = bundleId;
+        hostBundleIdByConfig[name] = stripWrappingQuotes(bundleId);
+        hostBundleIdQuotedByConfig[name] = hasWrappingQuotes(bundleId);
       }
     }
 
@@ -821,15 +838,21 @@ module.exports = function withPodfileResourceSigning(config) {
 
         const buildSettings = (cfg.buildSettings = cfg.buildSettings || {});
         const current = buildSettings.PRODUCT_BUNDLE_IDENTIFIER;
+        const shouldQuote =
+          (cfgName && hostBundleIdQuotedByConfig[cfgName]) ||
+          hostBundleIdQuotedByConfig.Release ||
+          hostBundleIdQuotedByConfig.release ||
+          hasWrappingQuotes(current);
+        const desiredFormatted = shouldQuote ? `"${desired}"` : desired;
 
-        if (current !== desired) {
-          buildSettings.PRODUCT_BUNDLE_IDENTIFIER = desired;
+        if (current !== desiredFormatted) {
+          buildSettings.PRODUCT_BUNDLE_IDENTIFIER = desiredFormatted;
           console.log(
-            `[withPodfileResourceSigning] SOBRE_XCODE_EXTENSION_BUNDLE_ID_PATCH_APPLIED target=${targetName} config=${cfgName} from=${current} to=${desired}`
+            `[withPodfileResourceSigning] SOBRE_XCODE_EXTENSION_BUNDLE_ID_PATCH_APPLIED target=${targetName} config=${cfgName} from=${current} to=${desiredFormatted}`
           );
         } else {
           console.log(
-            `[withPodfileResourceSigning] SOBRE_XCODE_EXTENSION_BUNDLE_ID_PATCH_NO_CHANGES target=${targetName} config=${cfgName} value=${desired}`
+            `[withPodfileResourceSigning] SOBRE_XCODE_EXTENSION_BUNDLE_ID_PATCH_NO_CHANGES target=${targetName} config=${cfgName} value=${desiredFormatted}`
           );
         }
       }
