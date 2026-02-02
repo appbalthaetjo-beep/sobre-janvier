@@ -413,6 +413,97 @@ function buildFixBlock(teamId) {
     puts "SOBRE_EXPO_PATCH_ERROR: #{e.class} #{e.message}"
   end
 
+  # Patch expo-notifications sources for Swift 6 (closure return type inference).
+  begin
+    ios_dir = Dir.pwd
+    project_root = File.expand_path('..', ios_dir)
+    pods_root = installer.sandbox.root.to_s
+
+    roots = [
+      File.join(project_root, 'node_modules', 'expo-notifications', 'ios', 'EXNotifications'),
+      File.join(ios_dir, 'node_modules', 'expo-notifications', 'ios', 'EXNotifications'),
+      File.join(pods_root, 'EXNotifications'),
+      File.join(pods_root, 'Pods', 'EXNotifications')
+    ].uniq
+
+    patches = [
+      [
+        File.join('Notifications', 'Background', 'BackgroundEventTransformer.swift'),
+        lambda do |content|
+          needle = 'let jsonData: String? = { () -> String? in'
+          if content.include?(needle)
+            content
+          else
+            content.gsub('let jsonData: String? = {', needle)
+          end
+        end
+      ],
+      [
+        File.join('Notifications', 'Categories', 'CategoriesModule.swift'),
+        lambda do |content|
+          needle = 'AsyncFunction("getNotificationCategoriesAsync") { () async -> [CategoryRecord] in'
+          if content.include?(needle)
+            content
+          else
+            content.gsub('AsyncFunction("getNotificationCategoriesAsync") {', needle)
+          end
+        end
+      ],
+      [
+        File.join('Notifications', 'Presenting', 'PresentationModule.swift'),
+        lambda do |content|
+          needle = 'AsyncFunction("getPresentedNotificationsAsync") { () async -> [[String: Any]] in'
+          if content.include?(needle)
+            content
+          else
+            content.gsub('AsyncFunction("getPresentedNotificationsAsync") {', needle)
+          end
+        end
+      ],
+      [
+        File.join('Notifications', 'Scheduling', 'SchedulerModule.swift'),
+        lambda do |content|
+          needle = 'AsyncFunction("getAllScheduledNotificationsAsync") { () async -> [[String: Any]] in'
+          if content.include?(needle)
+            content
+          else
+            content.gsub('AsyncFunction("getAllScheduledNotificationsAsync") {', needle)
+          end
+        end
+      ]
+    ]
+
+    patches.each do |rel_path, patch_fn|
+      found_any = false
+
+      roots.each do |root|
+        full_path = File.join(root, rel_path)
+        next unless File.exist?(full_path)
+        found_any = true
+
+        begin
+          content = File.read(full_path)
+          new_content = patch_fn.call(content)
+
+          if new_content == content
+            puts "SOBRE_EXPO_NOTIFICATIONS_PATCH_NO_CHANGES: #{full_path}"
+          else
+            File.write(full_path, new_content)
+            puts "SOBRE_EXPO_NOTIFICATIONS_PATCH_APPLIED: #{full_path}"
+          end
+        rescue => e
+          puts "SOBRE_EXPO_NOTIFICATIONS_PATCH_ERROR: #{e.class} #{e.message}"
+        end
+      end
+
+      unless found_any
+        puts "SOBRE_EXPO_NOTIFICATIONS_PATCH_MISSING_FILE: #{File.join(project_root, 'node_modules', 'expo-notifications', 'ios', 'EXNotifications', rel_path)}"
+      end
+    end
+  rescue => e
+    puts "SOBRE_EXPO_NOTIFICATIONS_PATCH_ERROR: #{e.class} #{e.message}"
+  end
+
   [installer.pods_project, *installer.generated_projects].compact.each do |project|
     apply_project_patch.call(project)
     project.targets.each do |target|
