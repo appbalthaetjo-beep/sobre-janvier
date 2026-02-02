@@ -1,4 +1,4 @@
-const { withPodfile } = require('@expo/config-plugins');
+const { withPodfile, withXcodeProject } = require('@expo/config-plugins');
 
 const SENTINEL = 'SOBRE_RESOURCE_BUNDLE_SIGNING_PATCH';
 const TEAM_ID = 'CTJ238754P';
@@ -711,7 +711,7 @@ function buildFixBlock(teamId) {
 
 module.exports = function withPodfileResourceSigning(config) {
   console.log('[withPodfileResourceSigning] applying Podfile signing patch');
-  return withPodfile(config, (config) => {
+  config = withPodfile(config, (config) => {
     const contents = config.modResults.contents;
     if (contents.includes(SENTINEL)) {
       return config;
@@ -726,4 +726,117 @@ module.exports = function withPodfileResourceSigning(config) {
 
     return config;
   });
+
+  // Patch iOS app extension bundle identifiers so they are prefixed with the host app's bundle id.
+  // This runs during `expo prebuild` / EAS prebuild when the Xcode project exists.
+  config = withXcodeProject(config, (config) => {
+    const project = config.modResults;
+
+    const getNativeTargets = () => {
+      const section = project.pbxNativeTargetSection();
+      return Object.entries(section)
+        .filter(([key, value]) => !key.endsWith('_comment') && value && typeof value === 'object')
+        .map(([id, value]) => ({ id, ...value }));
+    };
+
+    const getConfigListById = (id) => {
+      const lists = project.pbxXCConfigurationList();
+      return lists?.[id];
+    };
+
+    const getBuildConfigById = (id) => {
+      const cfgs = project.pbxXCBuildConfigurationSection();
+      return cfgs?.[id];
+    };
+
+    const getTargetBuildConfigs = (target) => {
+      const listId = target.buildConfigurationList?.value || target.buildConfigurationList;
+      if (!listId) return [];
+
+      const list = getConfigListById(listId);
+      const configs = list?.buildConfigurations || [];
+      return configs
+        .map((c) => ({
+          id: c.value || c,
+          name: c.comment || c.name || null,
+        }))
+        .map(({ id, name }) => {
+          const cfg = getBuildConfigById(id);
+          return { id, name, cfg };
+        })
+        .filter(({ cfg }) => cfg && typeof cfg === 'object');
+    };
+
+    const nativeTargets = getNativeTargets();
+    const appTargets = nativeTargets.filter((t) => t.productType === '"com.apple.product-type.application"');
+    const appTarget =
+      appTargets.find((t) => t.name === 'Sobre') ||
+      appTargets.find((t) => (t.name || '').toLowerCase() === 'sobre') ||
+      appTargets[0];
+
+    if (!appTarget) {
+      console.log('[withPodfileResourceSigning] SOBRE_XCODE_BUNDLEID_PATCH_SKIPPED_NO_APP_TARGET');
+      return config;
+    }
+
+    // Build a per-configuration host bundle id map (Debug/Release/etc).
+    const hostBundleIdByConfig = {};
+    for (const { name, cfg } of getTargetBuildConfigs(appTarget)) {
+      const bundleId = cfg?.buildSettings?.PRODUCT_BUNDLE_IDENTIFIER;
+      if (name && typeof bundleId === 'string' && bundleId.length > 0) {
+        hostBundleIdByConfig[name] = bundleId;
+      }
+    }
+
+    const hostReleaseBundleId =
+      hostBundleIdByConfig.Release ||
+      hostBundleIdByConfig.release ||
+      Object.values(hostBundleIdByConfig)[0];
+
+    console.log(
+      `[withPodfileResourceSigning] SOBRE_XCODE_HOST_BUNDLE_IDS target=${appTarget.name} ids=${JSON.stringify(
+        hostBundleIdByConfig
+      )}`
+    );
+
+    if (!hostReleaseBundleId) {
+      console.log('[withPodfileResourceSigning] SOBRE_XCODE_BUNDLEID_PATCH_SKIPPED_NO_HOST_BUNDLE_ID');
+      return config;
+    }
+
+    const suffixByTarget = [
+      { match: /DeviceActivityMonitor/i, suffix: 'deviceactivitymonitor' },
+      { match: /ShieldAction/i, suffix: 'shieldaction' },
+      { match: /ShieldConfiguration/i, suffix: 'shieldconfiguration' },
+    ];
+
+    for (const t of nativeTargets) {
+      const targetName = t.name || '';
+      const mapping = suffixByTarget.find((m) => m.match.test(targetName));
+      if (!mapping) continue;
+
+      for (const { name: cfgName, cfg } of getTargetBuildConfigs(t)) {
+        const parent = (cfgName && hostBundleIdByConfig[cfgName]) || hostReleaseBundleId;
+        const desired = `${parent}.${mapping.suffix}`;
+
+        const buildSettings = (cfg.buildSettings = cfg.buildSettings || {});
+        const current = buildSettings.PRODUCT_BUNDLE_IDENTIFIER;
+
+        if (current !== desired) {
+          buildSettings.PRODUCT_BUNDLE_IDENTIFIER = desired;
+          console.log(
+            `[withPodfileResourceSigning] SOBRE_XCODE_EXTENSION_BUNDLE_ID_PATCH_APPLIED target=${targetName} config=${cfgName} from=${current} to=${desired}`
+          );
+        } else {
+          console.log(
+            `[withPodfileResourceSigning] SOBRE_XCODE_EXTENSION_BUNDLE_ID_PATCH_NO_CHANGES target=${targetName} config=${cfgName} value=${desired}`
+          );
+        }
+      }
+    }
+
+    return config;
+  });
+
+  return config;
 };
