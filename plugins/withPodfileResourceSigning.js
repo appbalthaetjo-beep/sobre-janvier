@@ -504,6 +504,126 @@ function buildFixBlock(teamId) {
     puts "SOBRE_EXPO_NOTIFICATIONS_PATCH_ERROR: #{e.class} #{e.message}"
   end
 
+  # Patch expo-camera sources for Swift 6 / iOS 17.2 SDK compatibility.
+  begin
+    ios_dir = Dir.pwd
+    project_root = File.expand_path('..', ios_dir)
+    pods_root = installer.sandbox.root.to_s
+
+    camera_photo_candidates = [
+      File.join(project_root, 'node_modules', 'expo-camera', 'ios', 'Current', 'CameraPhotoCapture.swift'),
+      File.join(ios_dir, 'node_modules', 'expo-camera', 'ios', 'Current', 'CameraPhotoCapture.swift'),
+      File.join(pods_root, 'ExpoCamera', 'ios', 'Current', 'CameraPhotoCapture.swift'),
+      File.join(pods_root, 'ExpoCamera', 'Current', 'CameraPhotoCapture.swift'),
+      File.join(pods_root, 'Pods', 'ExpoCamera', 'ios', 'Current', 'CameraPhotoCapture.swift'),
+      File.join(pods_root, 'Pods', 'ExpoCamera', 'Current', 'CameraPhotoCapture.swift')
+    ].uniq
+
+    camera_video_candidates = [
+      File.join(project_root, 'node_modules', 'expo-camera', 'ios', 'Current', 'CameraVideoRecording.swift'),
+      File.join(ios_dir, 'node_modules', 'expo-camera', 'ios', 'Current', 'CameraVideoRecording.swift'),
+      File.join(pods_root, 'ExpoCamera', 'ios', 'Current', 'CameraVideoRecording.swift'),
+      File.join(pods_root, 'ExpoCamera', 'Current', 'CameraVideoRecording.swift'),
+      File.join(pods_root, 'Pods', 'ExpoCamera', 'ios', 'Current', 'CameraVideoRecording.swift'),
+      File.join(pods_root, 'Pods', 'ExpoCamera', 'Current', 'CameraVideoRecording.swift')
+    ].uniq
+
+    # 1) CameraPhotoCapture.swift: remove UIDevice.current.orientation usage.
+    photo_found = false
+    camera_photo_candidates.each do |path|
+      next unless File.exist?(path)
+      photo_found = true
+
+      begin
+        content = File.read(path)
+
+        if content.include?('SOBRE_EXPO_CAMERA_ORIENTATION_PATCH') || !content.include?('UIDevice.current.orientation')
+          puts "SOBRE_EXPO_CAMERA_PATCH_NO_CHANGES: #{path}"
+          next
+        end
+
+        new_content = content.dup
+        pattern = /^(\\s*)let orientation = captureDelegate\\?\\.responsiveWhenOrientationLocked == true \\?\\s*\\n\\s*captureDelegate\\?\\.physicalOrientation \\?\\? \\.unknown : UIDevice\\.current\\.orientation/
+        new_content.gsub!(pattern) do
+          indent = Regexp.last_match(1)
+          inner = indent + '  '
+          [
+            "#{indent}// SOBRE_EXPO_CAMERA_ORIENTATION_PATCH",
+            "#{indent}let orientation: UIDeviceOrientation",
+            "",
+            "#{indent}if captureDelegate?.responsiveWhenOrientationLocked == true {",
+            "#{inner}orientation = captureDelegate?.physicalOrientation ?? .unknown",
+            "#{indent}} else {",
+            "#{inner}// Avoid UIDevice.current.orientation (MainActor in Swift 6).",
+            "#{inner}// Reasonable default.",
+            "#{inner}orientation = .unknown",
+            "#{indent}}"
+          ].join(\"\\n\")
+        end
+
+        if new_content != content
+          File.write(path, new_content)
+          puts "SOBRE_EXPO_CAMERA_PATCH_APPLIED: #{path}"
+        else
+          puts "SOBRE_EXPO_CAMERA_PATCH_NO_CHANGES: #{path}"
+        end
+      rescue => e
+        puts "SOBRE_EXPO_CAMERA_PATCH_ERROR: #{e.class} #{e.message}"
+      end
+    end
+    puts "SOBRE_EXPO_CAMERA_PATCH_MISSING_FILE: #{camera_photo_candidates[0]}" unless photo_found
+
+    # 2) CameraVideoRecording.swift: remove UIDevice.current.orientation and iOS 18-only recording pause API usage.
+    video_found = false
+    camera_video_candidates.each do |path|
+      next unless File.exist?(path)
+      video_found = true
+
+      begin
+        content = File.read(path)
+        new_content = content.dup
+        changed = false
+
+        if new_content.include?('UIDevice.current.orientation')
+          orientation_pattern = /^(\\s*)let orientation = delegate\\?\\.responsiveWhenOrientationLocked == true \\?\\s*\\n\\s*delegate\\?\\.physicalOrientation \\?\\? \\.unknown : UIDevice\\.current\\.orientation/
+          new_content.gsub!(orientation_pattern) do
+            indent = Regexp.last_match(1)
+            "#{indent}let orientation = delegate?.physicalOrientation ?? .unknown"
+          end
+          changed = true if new_content != content
+        end
+
+        if new_content.include?('isRecordingPaused') && !new_content.include?('SOBRE_EXPO_CAMERA_IOS18_TOGGLE_NOOP')
+          toggle_pattern = /^(\\s*)@available\\(iOS 18\\.0, \\*\\)\\n\\1func toggleRecording\\(videoFileOutput: AVCaptureMovieFileOutput\\) \\{.*?\\n\\1\\}/m
+          new_content.gsub!(toggle_pattern) do
+            indent = Regexp.last_match(1)
+            [
+              "#{indent}@available(iOS 18.0, *)",
+              "#{indent}func toggleRecording(videoFileOutput: AVCaptureMovieFileOutput) {",
+              "#{indent}  // SOBRE_EXPO_CAMERA_IOS18_TOGGLE_NOOP",
+              "#{indent}  // iOS 18-only APIs (isRecordingPaused / pauseRecording / resumeRecording) are not",
+              "#{indent}  // available in the iOS 17.2 SDK used on EAS. Keep this as a no-op for now.",
+              "#{indent}}"
+            ].join(\"\\n\")
+          end
+          changed = true
+        end
+
+        if changed && new_content != content
+          File.write(path, new_content)
+          puts "SOBRE_EXPO_CAMERA_PATCH_APPLIED: #{path}"
+        else
+          puts "SOBRE_EXPO_CAMERA_PATCH_NO_CHANGES: #{path}"
+        end
+      rescue => e
+        puts "SOBRE_EXPO_CAMERA_PATCH_ERROR: #{e.class} #{e.message}"
+      end
+    end
+    puts "SOBRE_EXPO_CAMERA_PATCH_MISSING_FILE: #{camera_video_candidates[0]}" unless video_found
+  rescue => e
+    puts "SOBRE_EXPO_CAMERA_PATCH_ERROR: #{e.class} #{e.message}"
+  end
+
   # Patch react-native-fbsdk-next Expo adapter to be a no-op (Meta SDK API changes).
   begin
     ios_dir = Dir.pwd
