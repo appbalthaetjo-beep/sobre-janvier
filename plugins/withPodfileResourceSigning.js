@@ -504,6 +504,79 @@ function buildFixBlock(teamId) {
     puts "SOBRE_EXPO_NOTIFICATIONS_PATCH_ERROR: #{e.class} #{e.message}"
   end
 
+  # Patch react-native-fbsdk-next Expo adapter to be a no-op (Meta SDK API changes).
+  begin
+    ios_dir = Dir.pwd
+    project_root = File.expand_path('..', ios_dir)
+    pods_root = installer.sandbox.root.to_s
+
+    candidate_paths = [
+      File.join(project_root, 'node_modules', 'react-native-fbsdk-next', 'ios', 'ExpoAdapterFBSDKNext', 'FacebookAppDelegate.swift'),
+      File.join(ios_dir, 'node_modules', 'react-native-fbsdk-next', 'ios', 'ExpoAdapterFBSDKNext', 'FacebookAppDelegate.swift'),
+      File.join(pods_root, 'ExpoAdapterFBSDKNext', 'FacebookAppDelegate.swift'),
+      File.join(pods_root, 'Pods', 'ExpoAdapterFBSDKNext', 'FacebookAppDelegate.swift')
+    ].uniq
+
+    desired = <<~SWIFT_FBSDK
+    import ExpoModulesCore
+    import FBSDKCoreKit
+
+    public class FacebookAppDelegate: ExpoAppDelegateSubscriber {
+      public func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil
+      ) -> Bool {
+        // No-op: we don't rely on this adapter for FB login or deep links.
+        // Meta SDK init is handled elsewhere (info.plist / auto-init).
+        return false
+      }
+
+      public func application(
+        _ application: UIApplication,
+        open url: URL,
+        options: [UIApplication.OpenURLOptionsKey : Any] = [:]
+      ) -> Bool {
+        // No-op: we don't use Facebook login URL handling in the app.
+        return false
+      }
+    }
+    SWIFT_FBSDK
+
+    patched_any = false
+    found_any = false
+
+    candidate_paths.each do |path|
+      next unless File.exist?(path)
+      found_any = true
+
+      begin
+        content = File.read(path)
+
+        if content.include?("No-op: we don't rely on this adapter") && content.include?('return false')
+          puts "SOBRE_FBSDK_APPDELEGATE_PATCH_NO_CHANGES: #{path}"
+          next
+        end
+
+        if content == desired
+          puts "SOBRE_FBSDK_APPDELEGATE_PATCH_NO_CHANGES: #{path}"
+          next
+        end
+
+        File.write(path, desired)
+        patched_any = true
+        puts "SOBRE_FBSDK_APPDELEGATE_PATCH_APPLIED: #{path}"
+      rescue => e
+        puts "SOBRE_FBSDK_APPDELEGATE_PATCH_ERROR: #{e.class} #{e.message}"
+      end
+    end
+
+    unless found_any
+      puts "SOBRE_FBSDK_APPDELEGATE_PATCH_MISSING_FILE: #{candidate_paths[0]}"
+    end
+  rescue => e
+    puts "SOBRE_FBSDK_APPDELEGATE_PATCH_ERROR: #{e.class} #{e.message}"
+  end
+
   [installer.pods_project, *installer.generated_projects].compact.each do |project|
     apply_project_patch.call(project)
     project.targets.each do |target|
