@@ -4,10 +4,22 @@
   <dict>
     <key>CFBundleIdentifier</key>
     <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <key>CFBundleName</key>
+    <string>ShieldActionExtension</string>
+    <key>CFBundleDisplayName</key>
+    <string>ShieldActionExtension</string>
+    <key>CFBundleExecutable</key>
+    <string>$(EXECUTABLE_NAME)</string>
+    <key>CFBundlePackageType</key>
+    <string>XPC!</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
     <key>NSExtension</key>
     <dict>
       <key>NSExtensionPointIdentifier</key>
-      <string>com.apple.ManagedSettingsUI.ShieldActionExtension</string>
+      <string>com.apple.ManagedSettingsUI.shield-action-service</string>
       <key>NSExtensionPrincipalClass</key>
       <string>$(PRODUCT_MODULE_NAME).ShieldActionExtension</string>
     </dict>

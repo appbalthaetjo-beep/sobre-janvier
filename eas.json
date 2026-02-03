@@ -17,7 +17,7 @@
       },
       "ios": {
         "image": "macos-ventura-13.6-xcode-15.1",
-        "credentialsSource": "local"
+        "credentialsSource": "remote"
       }
     },
     "preview": {
@@ -28,7 +28,7 @@
         "APP_ENV": "preview"
       },
       "ios": {
-        "credentialsSource": "local"
+        "credentialsSource": "remote"
       }
     },
     "production": {
@@ -44,7 +44,7 @@
       "ios": {
         "resourceClass": "m-medium",
         "buildConfiguration": "Release",
-        "credentialsSource": "local"
+        "credentialsSource": "remote"
       },
       "android": {
         "buildType": "app-bundle"
