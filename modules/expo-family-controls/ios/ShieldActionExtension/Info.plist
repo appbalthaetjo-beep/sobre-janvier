@@ -19,7 +19,7 @@
     <key>NSExtension</key>
     <dict>
       <key>NSExtensionPointIdentifier</key>
-      <string>com.apple.ManagedSettingsUI.shield-action-service</string>
+      <string>com.apple.ManagedSettingsUI.shield-action</string>
       <key>NSExtensionPrincipalClass</key>
       <string>$(PRODUCT_MODULE_NAME).ShieldActionExtension</string>
     </dict>
