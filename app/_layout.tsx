@@ -19,6 +19,8 @@ import { recordNavigationEvent } from '@/utils/diagnostics';
 import { trackOnboardingScreen } from '../lib/posthog';
 import { initSobrietyStorageCompat } from '@/lib/storageCompat';
 import { initMetaOnce, sendMetaTestEvent } from '@/lib/metaSdk';
+import { initNotificationDeepLinks } from '@/src/notifications';
+import { useDailyResetPendingActionNotifier } from '@/src/useDailyResetPendingActionNotifier';
 
 const ONBOARDING_STEPS: { path: string; screen_name: string }[] = [
   { path: '/onboarding/index', screen_name: 'welcome' },
@@ -77,6 +79,7 @@ function RootLayoutInner() {
   useFrameworkReady();
   usePostHogInit();
   useMetaAppEvents();
+  useDailyResetPendingActionNotifier();
   const pathname = usePathname();
   const { user, loading } = useAuth();
   const { isLoading: rcLoading } = useRevenueCat();
@@ -204,39 +207,7 @@ function RootLayoutInner() {
   }, []);
 
   useEffect(() => {
-    let responseListener: Notifications.Subscription | undefined;
-
-    const setupNotifications = async () => {
-      try {
-        const { status } = await Notifications.requestPermissionsAsync();
-        console.log('[NOTIFICATIONS] permission', status);
-      } catch (error) {
-        console.warn('[NOTIFICATIONS] permission request failed', error);
-      }
-
-      try {
-        const initial = await Notifications.getLastNotificationResponseAsync();
-        const url = initial?.notification?.request?.content?.data?.url as string | undefined;
-        if (url) {
-          Linking.openURL(url).catch((error) => console.warn('[NOTIFICATIONS] openURL failed', error));
-        }
-      } catch (error) {
-        console.warn('[NOTIFICATIONS] initial response failed', error);
-      }
-
-      responseListener = Notifications.addNotificationResponseReceivedListener((response) => {
-        const url = response.notification.request.content.data?.url as string | undefined;
-        if (url) {
-          Linking.openURL(url).catch((error) => console.warn('[NOTIFICATIONS] openURL failed', error));
-        }
-      });
-    };
-
-    setupNotifications();
-
-    return () => {
-      responseListener?.remove();
-    };
+    return initNotificationDeepLinks();
   }, []);
 
   useEffect(() => {

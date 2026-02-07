@@ -6,6 +6,7 @@ import UserNotifications
 
 final class ShieldActionExtension: ShieldActionDelegate {
   private let appGroupSuiteName = "group.com.balthazar.sobre"
+  private let pendingActionKey = "pendingAction"
   private let eveningSelectionKey = "eveningSelection"
   private let eveningEnabledKey = "eveningEnabled"
   private let eveningStartKey = "eveningStart"
@@ -67,7 +68,8 @@ final class ShieldActionExtension: ShieldActionDelegate {
     // Daily flow
     switch action {
     case .primaryButtonPressed:
-      sendDailyCheckinNotification(defaults: defaults)
+      // Ask the main app to trigger the daily reset flow when it becomes active.
+      defaults.set("daily-reset", forKey: pendingActionKey)
       completionHandler(.defer)
     case .secondaryButtonPressed:
       completionHandler(.close)
