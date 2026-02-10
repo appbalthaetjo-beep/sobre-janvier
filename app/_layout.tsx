@@ -10,17 +10,18 @@ import { useAuth } from '@/hooks/useAuth';
 import { useRevenueCat } from '@/hooks/useRevenueCat';
 import { router } from 'expo-router';
 import SplashScreenComponent from '@/components/SplashScreen';
-import { Linking, Platform, View } from 'react-native';
+import { AppState, Linking, Platform, View } from 'react-native';
 import GlobalErrorBoundary from '@/components/GlobalErrorBoundary';
 import FeedbackModalHost from '@/components/FeedbackModalHost';
-import * as Notifications from 'expo-notifications';
 import { readShouldShowOnboardingFlag, subscribeShouldShowOnboardingFlag } from '@/utils/onboardingFlag';
 import { recordNavigationEvent } from '@/utils/diagnostics';
 import { trackOnboardingScreen } from '../lib/posthog';
 import { initSobrietyStorageCompat } from '@/lib/storageCompat';
 import { initMetaOnce, sendMetaTestEvent } from '@/lib/metaSdk';
 import { initNotificationDeepLinks } from '@/src/notifications';
-import { useDailyResetPendingActionNotifier } from '@/src/useDailyResetPendingActionNotifier';
+import { ensureDailyResetMorningReminderScheduled } from '@/src/dailyResetReminder';
+import { bumpAppOpenStreak } from '@/src/appOpenStreak';
+import { initPaywallAbandonReminders } from '@/src/lib/revenuecat';
 
 const ONBOARDING_STEPS: { path: string; screen_name: string }[] = [
   { path: '/onboarding/index', screen_name: 'welcome' },
@@ -79,7 +80,63 @@ function RootLayoutInner() {
   useFrameworkReady();
   usePostHogInit();
   useMetaAppEvents();
-  useDailyResetPendingActionNotifier();
+  // Daily Reset flow is user-initiated from the Home CTA (no auto-routing on launch).
+
+  useEffect(() => {
+    let isMounted = true;
+    const bump = async () => {
+      try {
+        const res = await bumpAppOpenStreak();
+        if (!isMounted) return;
+        console.log('[AppOpenStreak] bumped', res);
+      } catch (error) {
+        console.log('[AppOpenStreak] bump failed', error);
+      }
+    };
+
+    void bump();
+
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void bump();
+    });
+
+    return () => {
+      isMounted = false;
+      sub.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== 'ios') {
+      return;
+    }
+
+    let isMounted = true;
+
+    const sync = async (label: string) => {
+      try {
+        const family = await import('expo-family-controls');
+        if (!isMounted) return;
+        await family.applyCurrentShieldsNow();
+        console.log('[FamilyControls] applyCurrentShieldsNow', label);
+      } catch (error) {
+        console.log('[FamilyControls] applyCurrentShieldsNow failed', label, error);
+      }
+    };
+
+    void sync('startup');
+
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        void sync('active');
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      sub.remove();
+    };
+  }, []);
   const pathname = usePathname();
   const { user, loading } = useAuth();
   const { isLoading: rcLoading } = useRevenueCat();
@@ -208,6 +265,16 @@ function RootLayoutInner() {
 
   useEffect(() => {
     return initNotificationDeepLinks();
+  }, []);
+
+  useEffect(() => {
+    // Best-effort: keep the morning reminder scheduled without prompting at startup.
+    if (Platform.OS !== 'ios') return;
+    ensureDailyResetMorningReminderScheduled({ requestPermission: false }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    initPaywallAbandonReminders();
   }, []);
 
   useEffect(() => {
@@ -417,6 +484,9 @@ function RootLayoutInner() {
           <Stack.Screen name="lesson-detail" />
           <Stack.Screen name="privacy-policy" />
           <Stack.Screen name="terms-of-service" />
+          <Stack.Screen name="blocking-settings" />
+          <Stack.Screen name="daily-reset-settings" />
+          <Stack.Screen name="night-mode-settings" />
           <Stack.Screen name="settings" />
           <Stack.Screen name="profile" />
           <Stack.Screen name="debug/billing" />

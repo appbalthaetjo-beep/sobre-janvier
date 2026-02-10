@@ -1,50 +1,81 @@
 import { useEffect, useRef } from "react";
-import { AppState, AppStateStatus } from "react-native";
-import * as Notifications from "expo-notifications";
 import { NativeModulesProxy } from "expo-modules-core";
+import { router } from "expo-router";
+import { Platform } from "react-native";
 
 const PendingAction = NativeModulesProxy.PendingAction as
   | {
       consume(expected: string): boolean;
+      consumeIfRecent?: (expected: string, maxAgeSeconds: number) => boolean;
     }
   | undefined;
 
-async function ensureNotifPermission() {
-  const settings = await Notifications.getPermissionsAsync();
-  if (settings.status !== "granted") {
-    await Notifications.requestPermissionsAsync();
-  }
-}
+let didRunPendingActionCheck = false;
+let didWarnPendingActionMissing = false;
+let didWarnFamilyControlsMissing = false;
+let didLogConsumeIfRecentAvailability = false;
 
-async function fireDailyResetNotification() {
-  await Notifications.scheduleNotificationAsync({
-    content: {
-      title: "Sobre",
-      body: "Fais ton check-in Sobre pour déverrouiller tes apps aujourd’hui.",
-      data: { url: "sobre://daily-reset" },
-    },
-    trigger: null,
-  });
-}
+const MAX_PENDING_ACTION_AGE_SECONDS = 15;
 
 async function checkAndNotify() {
+  if (Platform.OS !== "ios") {
+    return;
+  }
+
   if (!PendingAction?.consume) {
+    if (!didWarnPendingActionMissing) {
+      didWarnPendingActionMissing = true;
+      console.log("[DailyReset] PendingAction module unavailable; skipping");
+    }
     return;
   }
 
-  const didConsume = PendingAction.consume("daily-reset");
-  if (!didConsume) {
+  const hasConsumeIfRecent = typeof PendingAction.consumeIfRecent === "function";
+  if (!didLogConsumeIfRecentAvailability) {
+    didLogConsumeIfRecentAvailability = true;
+    console.log("[DailyReset] PendingAction.consumeIfRecent available", { available: hasConsumeIfRecent });
+  }
+
+  if (!hasConsumeIfRecent) {
+    const didClear = PendingAction.consume("daily-reset");
+    if (didClear) {
+      console.log("[DailyReset] pending action cleared (daily-reset) without recency check");
+    }
     return;
   }
 
-  await ensureNotifPermission();
-  await fireDailyResetNotification();
+  const didConsume = PendingAction.consumeIfRecent!(
+    "daily-reset",
+    MAX_PENDING_ACTION_AGE_SECONDS
+  );
+  if (!didConsume) return;
+
+  console.log("[DailyReset] pending action consumed (daily-reset)");
+
+  // Only navigate if Family Controls native module is available; otherwise we risk crashing
+  // and getting stuck in an error-boundary remount loop.
+  const familyControls = (NativeModulesProxy as any)?.ExpoFamilyControls;
+  if (!familyControls) {
+    if (!didWarnFamilyControlsMissing) {
+      didWarnFamilyControlsMissing = true;
+      console.log("[DailyReset] ExpoFamilyControls module unavailable; not navigating to /daily-reset");
+    }
+    return;
+  }
+
+  // Daily Reset flow: when the Shield triggers the pending action, open the Daily Reset screen.
+  router.replace("/daily-reset");
 }
 
 export function useDailyResetPendingActionNotifier() {
   const runningRef = useRef(false);
 
   useEffect(() => {
+    if (didRunPendingActionCheck) {
+      return;
+    }
+    didRunPendingActionCheck = true;
+
     const run = () => {
       if (runningRef.current) return;
       runningRef.current = true;
@@ -57,15 +88,5 @@ export function useDailyResetPendingActionNotifier() {
 
     // Once on launch.
     run();
-
-    // And whenever the app becomes active or goes to background.
-    const sub = AppState.addEventListener("change", (state: AppStateStatus) => {
-      if (state === "active" || state === "background") {
-        run();
-      }
-    });
-
-    return () => sub.remove();
   }, []);
 }
-

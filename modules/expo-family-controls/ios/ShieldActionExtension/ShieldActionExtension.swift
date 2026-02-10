@@ -2,35 +2,35 @@ import FamilyControls
 import Foundation
 import ManagedSettings
 import ManagedSettingsUI
-import UserNotifications
 
 final class ShieldActionExtension: ShieldActionDelegate {
   private let appGroupSuiteName = "group.com.balthazar.sobre"
-  private let pendingActionKey = "pendingAction"
+  private let legacySelectionKey = "familyControlsSelection"
   private let eveningSelectionKey = "eveningSelection"
   private let eveningEnabledKey = "eveningEnabled"
   private let eveningStartKey = "eveningStart"
   private let eveningEndKey = "eveningEnd"
   private let eveningOverrideUntilKey = "eveningOverrideUntil"
   private let eveningOverrideWindowSecondsKey = "eveningOverrideWindowSeconds"
-  private let frictionStartKey = "eveningFrictionStart"
-  private let sosRequestedAtKey = "sosRequestedAt"
-  private let dailyNotifLastSentAtKey = "dailyNotifLastSentAt"
   private let store = ManagedSettingsStore()
 
   func handle(action: ShieldAction, for application: Application, completionHandler: @escaping (ShieldActionResponse) -> Void) {
+    print("[DailyReset] ShieldAction handle(for:application) invoked: \(action)")
     handleAction(action, completionHandler: completionHandler)
   }
 
   func handle(action: ShieldAction, for application: Application, in category: ActivityCategory, completionHandler: @escaping (ShieldActionResponse) -> Void) {
+    print("[DailyReset] ShieldAction handle(for:application,in:category) invoked: \(action)")
     handleAction(action, completionHandler: completionHandler)
   }
 
   func handle(action: ShieldAction, for category: ActivityCategory, completionHandler: @escaping (ShieldActionResponse) -> Void) {
+    print("[DailyReset] ShieldAction handle(for:category) invoked: \(action)")
     handleAction(action, completionHandler: completionHandler)
   }
 
   func handle(action: ShieldAction, for webDomain: WebDomain, completionHandler: @escaping (ShieldActionResponse) -> Void) {
+    print("[DailyReset] ShieldAction handle(for:webDomain) invoked: \(action)")
     handleAction(action, completionHandler: completionHandler)
   }
 
@@ -39,25 +39,24 @@ final class ShieldActionExtension: ShieldActionDelegate {
     ensureScheduleDefaults(defaults)
     let isEvening = isWithinEveningWindow(now: Date(), defaults: defaults)
     let eveningEnabled = defaults.bool(forKey: eveningEnabledKey)
+    print("[DailyReset] ShieldAction handleAction invoked action=\(action) isEvening=\(isEvening) eveningEnabled=\(eveningEnabled)")
 
     if isEvening && eveningEnabled {
       switch action {
       case .primaryButtonPressed:
-        if remainingFrictionSeconds(defaults: defaults) > 0 {
-          completionHandler(.defer)
-          return
-        }
         let overrideSeconds = max(1, defaults.integer(forKey: eveningOverrideWindowSecondsKey))
         let overrideUntil = Date().addingTimeInterval(TimeInterval(overrideSeconds)).timeIntervalSince1970
         defaults.set(overrideUntil, forKey: eveningOverrideUntilKey)
-        defaults.set(0, forKey: frictionStartKey)
         clearShield()
         DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(overrideSeconds)) { [weak self] in
           self?.applyShieldIfNeeded()
         }
-        completionHandler(.close)
+        // Important: `.close` closes the app and typically returns the user to the Home screen.
+        // Using `.defer` allows iOS to re-evaluate shielding immediately; since we cleared shields
+        // (and set an override window), the target app can continue opening.
+        completionHandler(.defer)
       case .secondaryButtonPressed:
-        defaults.set(Date().timeIntervalSince1970, forKey: sosRequestedAtKey)
+        // "Annuler" should dismiss the shield and *not* open the app.
         completionHandler(.close)
       @unknown default:
         completionHandler(.close)
@@ -68,9 +67,10 @@ final class ShieldActionExtension: ShieldActionDelegate {
     // Daily flow
     switch action {
     case .primaryButtonPressed:
-      // Ask the main app to trigger the daily reset flow when it becomes active.
-      defaults.set("daily-reset", forKey: pendingActionKey)
-      completionHandler(.defer)
+      // Simplified UX: the button just closes the Shield.
+      // The user must open Sobre manually to complete the Daily Reset.
+      print("[DailyReset] Shield tap: close (user will open Sobre)")
+      completionHandler(.close)
     case .secondaryButtonPressed:
       completionHandler(.close)
     @unknown default:
@@ -103,9 +103,7 @@ final class ShieldActionExtension: ShieldActionDelegate {
       return
     }
 
-    defaults.set(0, forKey: frictionStartKey)
     store.shield.applications = selection.applicationTokens
-    // TODO: Map categories to shield.applicationCategories when needed.
     store.shield.applicationCategories = nil
     store.shield.webDomains = selection.webDomainTokens
   }
@@ -122,7 +120,7 @@ final class ShieldActionExtension: ShieldActionDelegate {
 
   private func ensureScheduleDefaults(_ defaults: UserDefaults) {
     if defaults.object(forKey: eveningEnabledKey) == nil {
-      defaults.set(true, forKey: eveningEnabledKey)
+      defaults.set(false, forKey: eveningEnabledKey)
     }
     if defaults.string(forKey: eveningStartKey) == nil {
       defaults.set("22:00", forKey: eveningStartKey)
@@ -134,31 +132,24 @@ final class ShieldActionExtension: ShieldActionDelegate {
       defaults.set(0, forKey: eveningOverrideUntilKey)
     }
     if defaults.object(forKey: eveningOverrideWindowSecondsKey) == nil {
-      defaults.set(15, forKey: eveningOverrideWindowSecondsKey)
+      // Ensure we don't re-apply the shield too quickly after the user chose "Continuer quand même",
+      // otherwise it could interrupt their current session.
+      defaults.set(30 * 60, forKey: eveningOverrideWindowSecondsKey)
     }
-    if defaults.object(forKey: dailyNotifLastSentAtKey) == nil {
-      defaults.set(0, forKey: dailyNotifLastSentAtKey)
-    }
-  }
-
-  private func remainingFrictionSeconds(defaults: UserDefaults) -> Int {
-    let now = Date().timeIntervalSince1970
-    let start = defaults.double(forKey: frictionStartKey)
-    if start <= 0 {
-      defaults.set(now, forKey: frictionStartKey)
-      return 5
-    }
-    let elapsed = max(0, now - start)
-    return max(0, 5 - Int(elapsed))
   }
 
   private func loadSelection() -> FamilyActivitySelection? {
     let defaults = appGroupDefaults()
-    guard let base64 = defaults.string(forKey: eveningSelectionKey),
-          let data = Data(base64Encoded: base64) else {
-      return nil
+    if let base64 = defaults.string(forKey: legacySelectionKey),
+       let data = Data(base64Encoded: base64),
+       let selection = try? JSONDecoder().decode(FamilyActivitySelection.self, from: data) {
+      return selection
     }
-    return try? JSONDecoder().decode(FamilyActivitySelection.self, from: data)
+    if let base64 = defaults.string(forKey: eveningSelectionKey),
+       let data = Data(base64Encoded: base64) {
+      return try? JSONDecoder().decode(FamilyActivitySelection.self, from: data)
+    }
+    return nil
   }
 
   private func isWithinEveningWindow(now: Date, defaults: UserDefaults) -> Bool {
@@ -192,26 +183,75 @@ final class ShieldActionExtension: ShieldActionDelegate {
     return hours * 60 + minutes
   }
 
-  private func sendDailyCheckinNotification(defaults: UserDefaults) {
-    let now = Date().timeIntervalSince1970
-    let last = defaults.double(forKey: dailyNotifLastSentAtKey)
-    if now - last < 30 {
-      return
-    }
-    defaults.set(now, forKey: dailyNotifLastSentAtKey)
+  /* private func scheduleDailyResetLocalNotification() {
+    let center = UNUserNotificationCenter.current()
+
+    print("[DailyReset] schedule local notification from Shield tap")
+
+    center.removePendingNotificationRequests(withIdentifiers: [dailyResetLocalNotificationId])
+    center.removeDeliveredNotifications(withIdentifiers: [dailyResetLocalNotificationId])
 
     let content = UNMutableNotificationContent()
-    content.title = "Sobre"
-    content.body = "Fais ton check-in Sobre pour débloquer tes apps aujourd’hui."
+    content.title = "Daily Reset Sobre"
+    content.body = "Fais ton check-in pour débloquer tes apps pour aujourd’hui."
     content.sound = .default
-    content.userInfo = ["url": "sobre://daily-checkin"]
+    content.userInfo = ["url": "sobre://daily-reset", "type": "daily-reset"]
 
+    let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
     let request = UNNotificationRequest(
-      identifier: "daily-checkin",
+      identifier: dailyResetLocalNotificationId,
       content: content,
-      trigger: nil
+      trigger: trigger
     )
 
-    UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
-  }
+    center.add(request) { error in
+      if let error = error {
+        print("[DailyReset] failed to schedule local notification:", error.localizedDescription)
+      } else {
+        print("[DailyReset] local notification scheduled")
+      }
+    }
+  } */
+
+  /* private func triggerDailyResetPushIfPossible(defaults: UserDefaults) {
+    let now = Date().timeIntervalSince1970
+    let last = defaults.double(forKey: dailyResetLastTriggerAtKey)
+    if now - last < 3 {
+      print("[DailyReset] push trigger throttled (native)")
+      return
+    }
+    defaults.set(now, forKey: dailyResetLastTriggerAtKey)
+
+    guard let backendUrl = defaults.string(forKey: dailyResetBackendUrlKey),
+          let url = URL(string: backendUrl) else {
+      print("[DailyReset] missing backend url in app group; cannot trigger push")
+      return
+    }
+
+    guard let deviceKey = defaults.string(forKey: dailyResetDeviceKeyKey),
+          !deviceKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+      print("[DailyReset] missing deviceKey in app group; cannot trigger push")
+      return
+    }
+
+    print("[DailyReset] triggering backend push", backendUrl)
+
+    var request = URLRequest(url: url)
+    request.httpMethod = "POST"
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    let body: [String: Any] = ["deviceKey": deviceKey]
+    request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+    URLSession.shared.dataTask(with: request) { data, response, error in
+      if let error = error {
+        print("[DailyReset] backend push trigger failed", error.localizedDescription)
+        return
+      }
+      let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+      print("[DailyReset] backend push trigger response status=\(status)")
+      if let data = data, let text = String(data: data, encoding: .utf8), !text.isEmpty {
+        print("[DailyReset] backend push trigger response body=\(text)")
+      }
+    }.resume()
+  } */
 }

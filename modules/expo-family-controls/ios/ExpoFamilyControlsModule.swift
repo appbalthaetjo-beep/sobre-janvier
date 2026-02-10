@@ -1,3 +1,4 @@
+import DeviceActivity
 import ExpoModulesCore
 import FamilyControls
 import ManagedSettings
@@ -17,6 +18,8 @@ public final class ExpoFamilyControlsModule: Module {
   private let eveningEndKey = "eveningEnd"
   private let eveningOverrideUntilKey = "eveningOverrideUntil"
   private let eveningOverrideWindowSecondsKey = "eveningOverrideWindowSeconds"
+  private let dailyDeviceActivityName = DeviceActivityName("sobreDaily")
+  private let eveningDeviceActivityName = DeviceActivityName("sobreEvening")
   private let store = ManagedSettingsStore()
 
   public func definition() -> ModuleDefinition {
@@ -25,6 +28,10 @@ public final class ExpoFamilyControlsModule: Module {
     OnCreate {
       if let defaults = try? appGroupDefaults() {
         ensureScheduleDefaults(defaults)
+        if #available(iOS 16.0, *) {
+          try? configureDailyDeviceActivityMonitoring(defaults)
+          try? configureEveningDeviceActivityMonitoring(defaults)
+        }
       }
     }
 
@@ -79,6 +86,10 @@ public final class ExpoFamilyControlsModule: Module {
           onConfirm: { selection in
             do {
               try self.saveSelection(selection, key: self.legacySelectionKey)
+              if let defaults = try? self.appGroupDefaults(), #available(iOS 16.0, *) {
+                try? self.configureDailyDeviceActivityMonitoring(defaults)
+                try? self.configureEveningDeviceActivityMonitoring(defaults)
+              }
               let serialized = try Self.serialize(selection)
               presenter.dismiss(animated: true) {
                 promise.resolve(serialized)
@@ -193,18 +204,27 @@ public final class ExpoFamilyControlsModule: Module {
     AsyncFunction("setDailyEnabled") { (enabled: Bool) throws -> Bool in
       let defaults = try appGroupDefaults()
       defaults.set(enabled, forKey: dailyEnabledKey)
+      if #available(iOS 16.0, *) {
+        try? configureDailyDeviceActivityMonitoring(defaults)
+      }
       return true
     }
 
     AsyncFunction("setDailyResetTime") { (time: String) throws -> Bool in
       let defaults = try appGroupDefaults()
       defaults.set(time, forKey: dailyResetTimeKey)
+      if #available(iOS 16.0, *) {
+        try? configureDailyDeviceActivityMonitoring(defaults)
+      }
       return true
     }
 
     AsyncFunction("setEveningEnabled") { (enabled: Bool) throws -> Bool in
       let defaults = try appGroupDefaults()
       defaults.set(enabled, forKey: eveningEnabledKey)
+      if #available(iOS 16.0, *) {
+        try? configureEveningDeviceActivityMonitoring(defaults)
+      }
       return true
     }
 
@@ -212,6 +232,9 @@ public final class ExpoFamilyControlsModule: Module {
       let defaults = try appGroupDefaults()
       defaults.set(start, forKey: eveningStartKey)
       defaults.set(end, forKey: eveningEndKey)
+      if #available(iOS 16.0, *) {
+        try? configureEveningDeviceActivityMonitoring(defaults)
+      }
       return true
     }
 
@@ -247,9 +270,9 @@ public final class ExpoFamilyControlsModule: Module {
       ensureScheduleDefaults(defaults)
 
       let now = Date()
+      let dailyEnabled = defaults.bool(forKey: dailyEnabledKey)
       let isEvening = isWithinEveningWindow(now: now, defaults: defaults)
       let eveningEnabled = defaults.bool(forKey: eveningEnabledKey)
-      let dailyEnabled = defaults.bool(forKey: dailyEnabledKey)
 
       if isEvening && eveningEnabled {
         let overrideUntil = defaults.double(forKey: eveningOverrideUntilKey)
@@ -259,16 +282,19 @@ public final class ExpoFamilyControlsModule: Module {
           store.shield.webDomains = nil
           return true
         }
-        if let selection = loadSelection(key: eveningSelectionKey) {
+        if let selection = loadSelection(key: legacySelectionKey) ?? loadSelection(key: eveningSelectionKey) {
           store.shield.applications = selection.applicationTokens
-          // TODO: Map categories to shield.applicationCategories when needed.
           store.shield.applicationCategories = nil
           store.shield.webDomains = selection.webDomainTokens
           return true
         }
+        store.shield.applications = nil
+        store.shield.applicationCategories = nil
+        store.shield.webDomains = nil
+        return true
       }
 
-      if !isEvening && dailyEnabled {
+      if dailyEnabled {
         let unlockedUntil = defaults.double(forKey: dailyUnlockedUntilKey)
         if unlockedUntil > now.timeIntervalSince1970 {
           store.shield.applications = nil
@@ -276,7 +302,7 @@ public final class ExpoFamilyControlsModule: Module {
           store.shield.webDomains = nil
           return true
         }
-        if let selection = loadSelection(key: dailySelectionKey) {
+        if let selection = loadSelection(key: legacySelectionKey) ?? loadSelection(key: dailySelectionKey) {
           store.shield.applications = selection.applicationTokens
           // TODO: Map categories to shield.applicationCategories when needed.
           store.shield.applicationCategories = nil
@@ -310,7 +336,10 @@ public final class ExpoFamilyControlsModule: Module {
       let now = Date().timeIntervalSince1970
       let isEvening = isWithinEveningWindow(now: Date(), defaults: defaults)
       let isOverrideActive = overrideUntil > now
-      let hasSelection = loadSelectionData(key: dailySelectionKey) != nil || loadSelectionData(key: eveningSelectionKey) != nil
+      let hasSelection =
+        loadSelectionData(key: legacySelectionKey) != nil ||
+        loadSelectionData(key: dailySelectionKey) != nil ||
+        loadSelectionData(key: eveningSelectionKey) != nil
 
       return [
         "dailyEnabled": defaults.bool(forKey: dailyEnabledKey),
@@ -401,7 +430,7 @@ public final class ExpoFamilyControlsModule: Module {
       defaults.set(0, forKey: dailyUnlockedUntilKey)
     }
     if defaults.object(forKey: eveningEnabledKey) == nil {
-      defaults.set(true, forKey: eveningEnabledKey)
+      defaults.set(false, forKey: eveningEnabledKey)
     }
     if defaults.string(forKey: eveningStartKey) == nil {
       defaults.set("22:00", forKey: eveningStartKey)
@@ -415,6 +444,80 @@ public final class ExpoFamilyControlsModule: Module {
     if defaults.object(forKey: eveningOverrideWindowSecondsKey) == nil {
       defaults.set(15, forKey: eveningOverrideWindowSecondsKey)
     }
+  }
+
+  @available(iOS 16.0, *)
+  private func configureDailyDeviceActivityMonitoring(_ defaults: UserDefaults) throws {
+    let dailyEnabled = defaults.bool(forKey: dailyEnabledKey)
+    let hasDailySelection = loadSelectionData(key: legacySelectionKey) != nil || loadSelectionData(key: dailySelectionKey) != nil
+    let center = DeviceActivityCenter()
+
+    guard dailyEnabled, hasDailySelection else {
+      center.stopMonitoring([dailyDeviceActivityName])
+      return
+    }
+
+    let timeString = defaults.string(forKey: dailyResetTimeKey) ?? "08:00"
+    let (hour, minute) = parseHourMinute(timeString) ?? (8, 0)
+    let components = DateComponents(hour: hour, minute: minute)
+
+    // 1-minute repeating window anchored at the daily reset time.
+    let end = addMinutes(hour: hour, minute: minute, delta: 1)
+    let endComponents = DateComponents(hour: end.hour, minute: end.minute)
+    let schedule = DeviceActivitySchedule(intervalStart: components, intervalEnd: endComponents, repeats: true)
+
+    center.stopMonitoring([dailyDeviceActivityName])
+    try center.startMonitoring(dailyDeviceActivityName, during: schedule)
+  }
+
+  @available(iOS 16.0, *)
+  private func configureEveningDeviceActivityMonitoring(_ defaults: UserDefaults) throws {
+    let eveningEnabled = defaults.bool(forKey: eveningEnabledKey)
+    let hasEveningSelection = loadSelectionData(key: legacySelectionKey) != nil || loadSelectionData(key: eveningSelectionKey) != nil
+    let center = DeviceActivityCenter()
+
+    guard eveningEnabled, hasEveningSelection else {
+      center.stopMonitoring([eveningDeviceActivityName])
+      return
+    }
+
+    let startString = defaults.string(forKey: eveningStartKey) ?? "22:00"
+    let endString = defaults.string(forKey: eveningEndKey) ?? "07:00"
+    let (startHour, startMinute) = parseHourMinute(startString) ?? (22, 0)
+    let (endHour, endMinute) = parseHourMinute(endString) ?? (7, 0)
+
+    let startComponents = DateComponents(hour: startHour, minute: startMinute)
+    var endComponents = DateComponents(hour: endHour, minute: endMinute)
+
+    // Avoid start == end (treat as a tiny window); the shield logic itself decides what to show.
+    if startHour == endHour && startMinute == endMinute {
+      let end = addMinutes(hour: endHour, minute: endMinute, delta: 1)
+      endComponents = DateComponents(hour: end.hour, minute: end.minute)
+    }
+
+    let schedule = DeviceActivitySchedule(intervalStart: startComponents, intervalEnd: endComponents, repeats: true)
+
+    center.stopMonitoring([eveningDeviceActivityName])
+    try center.startMonitoring(eveningDeviceActivityName, during: schedule)
+  }
+
+  private func parseHourMinute(_ value: String) -> (Int, Int)? {
+    let parts = value.split(separator: ":")
+    guard parts.count == 2,
+          let hour = Int(parts[0]),
+          let minute = Int(parts[1]),
+          hour >= 0, hour < 24,
+          minute >= 0, minute < 60 else {
+      return nil
+    }
+    return (hour, minute)
+  }
+
+  private func addMinutes(hour: Int, minute: Int, delta: Int) -> (hour: Int, minute: Int) {
+    let total = ((hour * 60 + minute) + delta) % (24 * 60)
+    let h = (total / 60 + 24) % 24
+    let m = (total % 60 + 60) % 60
+    return (h, m)
   }
 
   private func isWithinEveningWindow(now: Date, defaults: UserDefaults) -> Bool {
@@ -504,6 +607,16 @@ public final class ExpoFamilyControlsModule: Module {
         onConfirm: { selection in
           do {
             try self.saveSelection(selection, key: key)
+            if key == self.dailySelectionKey {
+              if let defaults = try? self.appGroupDefaults(), #available(iOS 16.0, *) {
+                try? self.configureDailyDeviceActivityMonitoring(defaults)
+              }
+            }
+            if key == self.eveningSelectionKey {
+              if let defaults = try? self.appGroupDefaults(), #available(iOS 16.0, *) {
+                try? self.configureEveningDeviceActivityMonitoring(defaults)
+              }
+            }
             let serialized = try Self.serialize(selection)
             presenter.dismiss(animated: true) {
               promise.resolve(serialized)

@@ -13,9 +13,10 @@ import { linkRevenueCatUser } from '@/lib/auth/revenuecatAuth';
 import { setShouldShowOnboardingFlag } from '@/utils/onboardingFlag';
 import { firebaseConfig } from '@/config/firebase.config';
 import { identifyPostHogUser } from '../lib/posthog';
+import { getExpoPublicEnv } from '@/lib/publicEnv';
 
 const PASSWORD_RESET_REDIRECT_URL =
-  process.env.EXPO_PUBLIC_PASSWORD_RESET_REDIRECT_URL ||
+  getExpoPublicEnv('EXPO_PUBLIC_PASSWORD_RESET_REDIRECT_URL') ||
   `https://${firebaseConfig.authDomain}`;
 
 type NormalizedUser = {

@@ -1,9 +1,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Alert } from "react-native";
+import { getExpoPublicEnv } from "@/lib/publicEnv";
 
 const NAVIGATION_HISTORY_KEY = "debug:navigationHistory";
 const NAVIGATION_HISTORY_LIMIT = 40;
-const NAVIGATION_DIAGNOSTICS_FLAG = process.env.EXPO_PUBLIC_ENABLE_NAVIGATION_DIAGNOSTICS;
+const NAVIGATION_DIAGNOSTICS_FLAG = getExpoPublicEnv("EXPO_PUBLIC_ENABLE_NAVIGATION_DIAGNOSTICS");
 const DEV_FLAG = (globalThis as { __DEV__?: boolean }).__DEV__;
 const IS_DEV_BUILD = typeof DEV_FLAG === "boolean" ? DEV_FLAG : false;
 const SHOULD_SHOW_NAVIGATION_ALERTS =

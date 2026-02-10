@@ -3,17 +3,20 @@ import { AppState, InteractionManager, Platform, Linking } from 'react-native';
 import Constants from 'expo-constants';
 import Purchases, { CustomerInfo } from 'react-native-purchases';
 import PurchasesUI, { PAYWALL_RESULT } from 'react-native-purchases-ui';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
 import { promoEvents } from './analytics';
 import { capturePostHogEvent } from './posthog';
+import { getExpoPublicEnv } from '@/lib/publicEnv';
 
 const APP_OWNERSHIP = Constants?.appOwnership ?? 'unknown';
-const FORCE_ENABLE = process.env.EXPO_PUBLIC_ENABLE_REVENUECAT === 'true';
+const FORCE_ENABLE = getExpoPublicEnv('EXPO_PUBLIC_ENABLE_REVENUECAT') === 'true';
 const ENABLE_REVENUECAT = FORCE_ENABLE || (Platform.OS !== 'web' && APP_OWNERSHIP !== 'expo');
 const CAN_USE_NATIVE_PAYWALL = Platform.OS !== 'web' && APP_OWNERSHIP !== 'expo';
-const RC_IOS_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY?.trim();
-const RC_ANDROID_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY?.trim();
-const RC_WEB_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_WEB_API_KEY?.trim();
-const RC_FALLBACK_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_API_KEY?.trim();
+const RC_IOS_API_KEY = getExpoPublicEnv('EXPO_PUBLIC_REVENUECAT_IOS_API_KEY')?.trim();
+const RC_ANDROID_API_KEY = getExpoPublicEnv('EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY')?.trim();
+const RC_WEB_API_KEY = getExpoPublicEnv('EXPO_PUBLIC_REVENUECAT_WEB_API_KEY')?.trim();
+const RC_FALLBACK_API_KEY = getExpoPublicEnv('EXPO_PUBLIC_REVENUECAT_API_KEY')?.trim();
 
 if (!ENABLE_REVENUECAT) {
   const reason = FORCE_ENABLE ? 'forced disable' : `appOwnership=${APP_OWNERSHIP}`;
@@ -24,6 +27,254 @@ let purchasesConfigured = false;
 let didConfigure = false;
 let initPromise: Promise<boolean> | null = null;
 let runtimeReadyPromise: Promise<void> | null = null;
+
+const PAYWALL_ABANDON_OPENED_AT_KEY = 'paywallAbandonOpenedAtMs';
+const PAYWALL_ABANDON_CANDIDATE_AT_KEY = 'paywallAbandonCandidateAtMs';
+const PAYWALL_ABANDON_LAST_SCHEDULED_AT_KEY = 'paywallAbandonLastScheduledAtMs';
+const PAYWALL_ABANDON_ID_30M_KEY = 'paywallAbandonNotificationId30m';
+const PAYWALL_ABANDON_ID_NEXTDAY_KEY = 'paywallAbandonNotificationIdNextDay10';
+
+const PAYWALL_ABANDON_SHORTCUT_URL_30M = 'sobre://paywall?source=paywall-abandon-30m';
+const PAYWALL_ABANDON_SHORTCUT_URL_NEXTDAY = 'sobre://paywall?source=paywall-abandon-nextday10';
+
+const POST_PURCHASE_BLOCKERS_REMINDER_LAST_SCHEDULED_AT_KEY = 'postPurchaseBlockersReminderLastScheduledAtMs';
+const POST_PURCHASE_BLOCKERS_REMINDER_ID_30M_KEY = 'postPurchaseBlockersReminderNotificationId30m';
+const POST_PURCHASE_BLOCKERS_REMINDER_URL = 'sobre://blocking-settings?source=post-purchase-reminder';
+
+let paywallOpenedAtMs: number | null = null;
+let paywallCandidateAtMs: number | null = null;
+let paywallAbandonInitDone = false;
+let paywallAbandonListener: { remove?: () => void } | null = null;
+
+async function cancelPostPurchaseBlockersReminder() {
+  try {
+    const id = await AsyncStorage.getItem(POST_PURCHASE_BLOCKERS_REMINDER_ID_30M_KEY);
+    if (id) {
+      await Notifications.cancelScheduledNotificationAsync(id);
+    }
+  } catch (error) {
+    console.log('[PostPurchaseReminder] cancel failed', error);
+  } finally {
+    await AsyncStorage.multiRemove([
+      POST_PURCHASE_BLOCKERS_REMINDER_ID_30M_KEY,
+      POST_PURCHASE_BLOCKERS_REMINDER_LAST_SCHEDULED_AT_KEY,
+    ]).catch(() => {});
+  }
+}
+
+async function schedulePostPurchaseBlockersReminder() {
+  if (Platform.OS !== 'ios') return;
+
+  const perms = await Notifications.getPermissionsAsync();
+  if (perms.status !== 'granted') {
+    return;
+  }
+
+  // Only for premium users.
+  try {
+    if (!ENABLE_REVENUECAT) return;
+    if (!purchasesConfigured && !(await ensurePurchasesConfigured())) {
+      return;
+    }
+
+    const info = await Purchases.getCustomerInfo();
+    const pro = Boolean(info.entitlements?.active?.[ENTITLEMENT_ID]);
+    if (!pro) return;
+  } catch {
+    return;
+  }
+
+  const now = Date.now();
+  const lastScheduled = Number((await AsyncStorage.getItem(POST_PURCHASE_BLOCKERS_REMINDER_LAST_SCHEDULED_AT_KEY)) ?? 0);
+  if (lastScheduled > 0 && now - lastScheduled < 7 * 24 * 60 * 60 * 1000) {
+    return;
+  }
+
+  await cancelPostPurchaseBlockersReminder();
+
+  const id = await Notifications.scheduleNotificationAsync({
+    content: {
+      title: 'SOBRE',
+      body: '🔒 Pense à configurer tes bloqueurs pour rester protégé au quotidien.',
+      data: { url: POST_PURCHASE_BLOCKERS_REMINDER_URL, type: 'post-purchase-blockers-30m' },
+    },
+    trigger: { seconds: 30 * 60 },
+  });
+
+  await AsyncStorage.multiSet([
+    [POST_PURCHASE_BLOCKERS_REMINDER_ID_30M_KEY, id],
+    [POST_PURCHASE_BLOCKERS_REMINDER_LAST_SCHEDULED_AT_KEY, String(now)],
+  ]);
+
+  console.log('[PostPurchaseReminder] scheduled blockers reminder', { id });
+}
+
+async function cancelPaywallAbandonReminders() {
+  try {
+    const [id30, idNext] = await Promise.all([
+      AsyncStorage.getItem(PAYWALL_ABANDON_ID_30M_KEY),
+      AsyncStorage.getItem(PAYWALL_ABANDON_ID_NEXTDAY_KEY),
+    ]);
+    if (id30) {
+      await Notifications.cancelScheduledNotificationAsync(id30);
+    }
+    if (idNext) {
+      await Notifications.cancelScheduledNotificationAsync(idNext);
+    }
+  } catch (error) {
+    console.log('[PaywallAbandon] cancel failed', error);
+  } finally {
+    await AsyncStorage.multiRemove([
+      PAYWALL_ABANDON_ID_30M_KEY,
+      PAYWALL_ABANDON_ID_NEXTDAY_KEY,
+      PAYWALL_ABANDON_LAST_SCHEDULED_AT_KEY,
+    ]).catch(() => {});
+  }
+}
+
+function computeTomorrowAt10Local(now = new Date()) {
+  const d = new Date(now);
+  d.setDate(d.getDate() + 1);
+  d.setHours(10, 0, 0, 0);
+  return d;
+}
+
+async function schedulePaywallAbandonReminders() {
+  if (Platform.OS !== 'ios') return;
+
+  const perms = await Notifications.getPermissionsAsync();
+  if (perms.status !== 'granted') {
+    console.log('[PaywallAbandon] notifications not granted; skipping schedule');
+    return;
+  }
+
+  // Never notify paying users (only schedule if we can confirm the user is NOT premium).
+  try {
+    if (!ENABLE_REVENUECAT) return;
+    if (!purchasesConfigured && !(await ensurePurchasesConfigured())) {
+      return;
+    }
+
+    const info = await Purchases.getCustomerInfo();
+    logCustomerInfo('getCustomerInfo:paywallAbandon', info);
+
+    const pro = Boolean(info.entitlements?.active?.[ENTITLEMENT_ID]);
+    if (pro) return;
+  } catch (error) {
+    console.log('[PaywallAbandon] failed to confirm pro status; skipping schedule', error);
+    return;
+  }
+
+  const now = Date.now();
+  const lastScheduled = Number((await AsyncStorage.getItem(PAYWALL_ABANDON_LAST_SCHEDULED_AT_KEY)) ?? 0);
+  if (lastScheduled > 0 && now - lastScheduled < 24 * 60 * 60 * 1000) {
+    return;
+  }
+
+  await cancelPaywallAbandonReminders();
+
+  const id30m = await Notifications.scheduleNotificationAsync({
+    content: {
+      title: 'SOBRE',
+      body: "✨ Essai gratuit disponible — obtiens l’accès complet à l’app SOBRE.",
+      data: { url: PAYWALL_ABANDON_SHORTCUT_URL_30M, type: 'paywall-abandon-30m' },
+    },
+    trigger: { seconds: 30 * 60 },
+  });
+
+  const tomorrow10 = computeTomorrowAt10Local(new Date(now));
+  const idNextDay = await Notifications.scheduleNotificationAsync({
+    content: {
+      title: 'SOBRE',
+      body: "✨ Tu peux essayer gratuitement — débloque l’accès complet à l’app SOBRE.",
+      data: { url: PAYWALL_ABANDON_SHORTCUT_URL_NEXTDAY, type: 'paywall-abandon-nextday10' },
+    },
+    trigger: { type: 'date', date: tomorrow10 },
+  });
+
+  await AsyncStorage.multiSet([
+    [PAYWALL_ABANDON_ID_30M_KEY, id30m],
+    [PAYWALL_ABANDON_ID_NEXTDAY_KEY, idNextDay],
+    [PAYWALL_ABANDON_LAST_SCHEDULED_AT_KEY, String(now)],
+  ]);
+
+  console.log('[PaywallAbandon] scheduled reminders', {
+    id30m,
+    idNextDay,
+    tomorrow10: tomorrow10.toISOString(),
+  });
+}
+
+async function clearPaywallAbandonState() {
+  paywallOpenedAtMs = null;
+  paywallCandidateAtMs = null;
+  await AsyncStorage.multiRemove([PAYWALL_ABANDON_OPENED_AT_KEY, PAYWALL_ABANDON_CANDIDATE_AT_KEY]).catch(() => {});
+}
+
+async function markPaywallOpenedForAbandonReminders() {
+  if (Platform.OS !== 'ios') return;
+  const now = Date.now();
+  paywallOpenedAtMs = now;
+  paywallCandidateAtMs = null;
+  await AsyncStorage.multiSet([
+    [PAYWALL_ABANDON_OPENED_AT_KEY, String(now)],
+    [PAYWALL_ABANDON_CANDIDATE_AT_KEY, '0'],
+  ]).catch(() => {});
+}
+
+async function markPaywallClosedWithoutPurchaseForAbandonReminders() {
+  if (Platform.OS !== 'ios') return;
+  const now = Date.now();
+  paywallOpenedAtMs = null;
+  paywallCandidateAtMs = now;
+  await AsyncStorage.multiSet([
+    [PAYWALL_ABANDON_OPENED_AT_KEY, '0'],
+    [PAYWALL_ABANDON_CANDIDATE_AT_KEY, String(now)],
+  ]).catch(() => {});
+}
+
+async function maybeScheduleAbandonRemindersFromExit() {
+  if (Platform.OS !== 'ios') return;
+  const now = Date.now();
+
+  const openedRaw = (await AsyncStorage.getItem(PAYWALL_ABANDON_OPENED_AT_KEY)) ?? '0';
+  const candRaw = (await AsyncStorage.getItem(PAYWALL_ABANDON_CANDIDATE_AT_KEY)) ?? '0';
+  const openedAt = paywallOpenedAtMs ?? Number(openedRaw);
+  const candidateAt = paywallCandidateAtMs ?? Number(candRaw);
+
+  const withinWindow = (ts: number) => ts > 0 && now - ts < 5 * 60 * 1000;
+  if (!withinWindow(openedAt) && !withinWindow(candidateAt)) {
+    return;
+  }
+
+  // Avoid rescheduling repeatedly during the same session.
+  await clearPaywallAbandonState();
+  await schedulePaywallAbandonReminders();
+}
+
+export function initPaywallAbandonReminders() {
+  if (paywallAbandonInitDone) return;
+  paywallAbandonInitDone = true;
+
+  if (Platform.OS !== 'ios') return;
+
+  // Best-effort: if the user is already premium, ensure nothing is scheduled.
+  isProActive()
+    .then((pro) => {
+      if (pro) {
+        void cancelPaywallAbandonReminders();
+        void cancelPostPurchaseBlockersReminder();
+      }
+    })
+    .catch(() => {});
+
+  if (paywallAbandonListener) return;
+  paywallAbandonListener = AppState.addEventListener('change', (state) => {
+    if (state === 'background' || state === 'inactive') {
+      void maybeScheduleAbandonRemindersFromExit();
+    }
+  }) as unknown as { remove?: () => void };
+}
 
 type PaywallTrackingContext = {
   step?: number;
@@ -342,6 +593,7 @@ export async function showDefaultPaywall(tracking?: PaywallTrackingContext): Pro
 
   await promoEvents.paywallOpen('default');
   try {
+    await markPaywallOpenedForAbandonReminders();
     if (!purchasesConfigured && !(await ensurePurchasesConfigured())) {
       return PAYWALL_RESULT.NOT_PRESENTED;
     }
@@ -355,14 +607,23 @@ export async function showDefaultPaywall(tracking?: PaywallTrackingContext): Pro
     const offerings = await Purchases.getOfferings();
     const mainOffering = offerings.all?.main;
 
-    if (mainOffering) {
-      return await presentPaywallAndTrack({ offering: mainOffering, displayCloseButton: false }, tracking);
+    const result = mainOffering
+      ? await presentPaywallAndTrack({ offering: mainOffering, displayCloseButton: false }, tracking)
+      : await presentPaywallAndTrack({ displayCloseButton: false }, tracking);
+
+    if (result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED) {
+      await clearPaywallAbandonState();
+      await cancelPaywallAbandonReminders();
+      await schedulePostPurchaseBlockersReminder();
+    } else {
+      await markPaywallClosedWithoutPurchaseForAbandonReminders();
     }
 
-    return await presentPaywallAndTrack({ displayCloseButton: false }, tracking);
+    return result;
   } catch (error) {
     console.warn('Paywall default error', error);
     await promoEvents.purchaseCancel('default');
+    await markPaywallClosedWithoutPurchaseForAbandonReminders();
     return PAYWALL_RESULT.ERROR;
   }
 }
@@ -376,6 +637,7 @@ export async function showPromoPaywall(tracking?: PaywallTrackingContext): Promi
 
   await promoEvents.paywallOpen('promo');
   try {
+    await markPaywallOpenedForAbandonReminders();
     if (!purchasesConfigured && !(await ensurePurchasesConfigured())) {
       return PAYWALL_RESULT.NOT_PRESENTED;
     }
@@ -389,15 +651,27 @@ export async function showPromoPaywall(tracking?: PaywallTrackingContext): Promi
     const offerings = await Purchases.getOfferings();
     const promoOffering = offerings.all?.promo;
 
+    let result: PAYWALL_RESULT;
     if (!promoOffering) {
       console.warn('Promo offering not configured, falling back to default paywall');
-      return await presentPaywallAndTrack({ displayCloseButton: true }, tracking);
+      result = await presentPaywallAndTrack({ displayCloseButton: true }, tracking);
+    } else {
+      result = await presentPaywallAndTrack({ offering: promoOffering, displayCloseButton: true }, tracking);
     }
 
-    return await presentPaywallAndTrack({ offering: promoOffering, displayCloseButton: true }, tracking);
+    if (result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED) {
+      await clearPaywallAbandonState();
+      await cancelPaywallAbandonReminders();
+      await schedulePostPurchaseBlockersReminder();
+    } else {
+      await markPaywallClosedWithoutPurchaseForAbandonReminders();
+    }
+
+    return result;
   } catch (error) {
     console.warn('Paywall promo error', error);
     await promoEvents.purchaseCancel('promo');
+    await markPaywallClosedWithoutPurchaseForAbandonReminders();
     return PAYWALL_RESULT.ERROR;
   }
 }

@@ -5,6 +5,7 @@ import ManagedSettings
 
 final class DeviceActivityMonitorExtension: DeviceActivityMonitor {
   private let appGroupSuiteName = "group.com.balthazar.sobre"
+  private let legacySelectionKey = "familyControlsSelection"
   private let dailySelectionKey = "dailySelection"
   private let eveningSelectionKey = "eveningSelection"
   private let dailyEnabledKey = "dailyEnabled"
@@ -13,7 +14,6 @@ final class DeviceActivityMonitorExtension: DeviceActivityMonitor {
   private let eveningStartKey = "eveningStart"
   private let eveningEndKey = "eveningEnd"
   private let eveningOverrideUntilKey = "eveningOverrideUntil"
-  private let frictionStartKey = "eveningFrictionStart"
   private let store = ManagedSettingsStore()
 
   override func intervalDidStart(for activity: DeviceActivityName) {
@@ -21,7 +21,9 @@ final class DeviceActivityMonitorExtension: DeviceActivityMonitor {
   }
 
   override func intervalDidEnd(for activity: DeviceActivityName) {
-    clearShield()
+    // Keep shields in sync at the end boundary too (e.g. daily reset time),
+    // so apps reliably re-lock even if the containing app hasn't been opened.
+    applyShieldIfNeeded()
   }
 
   override func eventDidReachThreshold(_ event: DeviceActivityEvent.Name, activity: DeviceActivityName) {
@@ -47,11 +49,10 @@ final class DeviceActivityMonitorExtension: DeviceActivityMonitor {
         clearShield()
         return
       }
-      guard let selection = loadSelection(key: eveningSelectionKey) else {
+      guard let selection = loadSelection(key: legacySelectionKey) ?? loadSelection(key: eveningSelectionKey) else {
         clearShield()
         return
       }
-      defaults.set(0, forKey: frictionStartKey)
       store.shield.applications = selection.applicationTokens
       // TODO: Map categories to shield.applicationCategories when needed.
       store.shield.applicationCategories = nil
@@ -59,13 +60,13 @@ final class DeviceActivityMonitorExtension: DeviceActivityMonitor {
       return
     }
 
-    if !isEvening && dailyEnabled {
+    if dailyEnabled {
       let unlockedUntil = defaults.double(forKey: dailyUnlockedUntilKey)
       if unlockedUntil > now.timeIntervalSince1970 {
         clearShield()
         return
       }
-      guard let selection = loadSelection(key: dailySelectionKey) else {
+      guard let selection = loadSelection(key: legacySelectionKey) ?? loadSelection(key: dailySelectionKey) else {
         clearShield()
         return
       }
@@ -97,7 +98,7 @@ final class DeviceActivityMonitorExtension: DeviceActivityMonitor {
       defaults.set(0, forKey: dailyUnlockedUntilKey)
     }
     if defaults.object(forKey: eveningEnabledKey) == nil {
-      defaults.set(true, forKey: eveningEnabledKey)
+      defaults.set(false, forKey: eveningEnabledKey)
     }
     if defaults.string(forKey: eveningStartKey) == nil {
       defaults.set("22:00", forKey: eveningStartKey)

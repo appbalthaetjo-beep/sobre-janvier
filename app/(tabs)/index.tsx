@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useReducer } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, StatusBar, Dimensions, Image, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, StatusBar, Dimensions, Image, Platform } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -8,26 +8,22 @@ import CrystalDisplay from '@/components/CrystalDisplay';
 import Method306090 from '@/components/Method30-60-90';
 import MilestonePopup from '@/components/MilestonePopup';
 import DailyMissions from '@/components/DailyMissions';
-import { t } from '@/src/i18n/strings';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
-import { Calendar, Book, Heart, RotateCcw, Share, Target, TrendingUp, TriangleAlert as AlertTriangle } from 'lucide-react-native';
+import { Book, Heart, RotateCcw, Share, TriangleAlert as AlertTriangle } from 'lucide-react-native';
 import OpenBlockPickerButton from '@/components/OpenBlockPickerButton';
 import { scheduleDay7Prompt } from '@/utils/reviewPrompts';
-import { readSobrietyDataForCurrentUser, writeSobrietyBundleForCurrentUser } from '@/utils/sobrietyStorage';
-import { getIdentityDebugInfo } from '@/utils/publicUser';
+import { getAppOpenStreak } from '@/src/appOpenStreak';
+import { maybeNotifyMilestone } from '@/src/milestoneNotifications';
 import {
-  applyShieldFromSavedSelection,
-  clearShield,
-  getSavedSelection,
-  type SerializedSelection,
+  getBlockState,
 } from 'expo-family-controls';
 
 const { width } = Dimensions.get('window');
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 export default function HomeScreen() {
-  const { loadSobrietyData, saveSobrietyData, loadUserData } = useFirestore();
+  const { loadSobrietyData, saveSobrietyData } = useFirestore();
   const [sobrietyData, setSobrietyData] = useState({
     startDate: new Date().toISOString(),
     daysSober: 0,
@@ -38,13 +34,12 @@ export default function HomeScreen() {
   });
 
   const [, forceUpdate] = useReducer((value) => value + 1, 0);
-  const [motivationalPhrase, setMotivationalPhrase] = useState('');
+  const [appOpenStreak, setAppOpenStreak] = useState(0);
   const [showMilestonePopup, setShowMilestonePopup] = useState(false);
   const [currentMilestone, setCurrentMilestone] = useState(null);
   const milestoneTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reviewTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [familySelection, setFamilySelection] = useState<SerializedSelection | null>(null);
-  const [shieldBusy, setShieldBusy] = useState(false);
+  const [blockingState, setBlockingState] = useState<any>(null);
 
   const milestones = [
     { day: 1, title: "Allumage", image: "https://i.imgur.com/I0CDkDl.png" },
@@ -111,6 +106,7 @@ export default function HomeScreen() {
     }
 
     scheduleMilestonePopup(latestMilestone);
+    void maybeNotifyMilestone(latestMilestone.day);
 
     const updatedData = {
       ...sobrietyData,
@@ -157,54 +153,15 @@ export default function HomeScreen() {
     };
   }, []);
 
-  useEffect(() => {
-    let active = true;
-    const loadSelection = async () => {
-      try {
-        const saved = await getSavedSelection();
-        if (active) {
-          setFamilySelection(saved ?? null);
-        }
-      } catch (error) {
-        console.log('[FamilyControls] Failed to load selection:', error);
-      }
-    };
-    loadSelection();
-    return () => {
-      active = false;
-    };
+  const refreshBlockingState = useCallback(async () => {
+    try {
+      if (Platform.OS !== 'ios') return;
+      const state = await getBlockState();
+      setBlockingState(state);
+    } catch (error) {
+      console.log('[Home] getBlockState failed', error);
+    }
   }, []);
-
-  const handleApplyShield = async () => {
-    if (shieldBusy) return;
-    setShieldBusy(true);
-    try {
-      const result = await applyShieldFromSavedSelection();
-      Alert.alert(
-        'Blocage activé',
-        `Apps: ${result.appsCount}\nCatégories: ${result.categoriesCount}\nWeb: ${result.webDomainsCount}`
-      );
-    } catch (error: any) {
-      console.log('[FamilyControls] Apply shield error:', error);
-      Alert.alert('Blocage', error?.message ?? 'Impossible d’activer le blocage.');
-    } finally {
-      setShieldBusy(false);
-    }
-  };
-
-  const handleClearShield = async () => {
-    if (shieldBusy) return;
-    setShieldBusy(true);
-    try {
-      await clearShield();
-      Alert.alert('Blocage désactivé', 'Le blocage a été retiré.');
-    } catch (error: any) {
-      console.log('[FamilyControls] Clear shield error:', error);
-      Alert.alert('Blocage', error?.message ?? 'Impossible de désactiver le blocage.');
-    } finally {
-      setShieldBusy(false);
-    }
-  };
   const loadData = useCallback(async () => {
     try {
       const { data: firestoreSobrietyData } = await loadSobrietyData();
@@ -257,7 +214,11 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       loadData();
-    }, [loadData])
+      void getAppOpenStreak()
+        .then(setAppOpenStreak)
+        .catch((error) => console.log('[Home] getAppOpenStreak failed', error));
+      void refreshBlockingState();
+    }, [loadData, refreshBlockingState])
   );
 
   const formatTime = (value: number) => {
@@ -290,6 +251,10 @@ export default function HomeScreen() {
               resizeMode="contain"
             />
             <Text style={styles.slogan}>Tu forges ta liberté</Text>
+            <View style={styles.appOpenStreakPill}>
+              <Text style={styles.appOpenStreakEmoji}>🔥</Text>
+              <Text style={styles.appOpenStreakText}>{appOpenStreak}</Text>
+            </View>
           </View>
 
           {/* 2. Titre "SOBRE DEPUIS" + Bloc central */}
@@ -374,6 +339,38 @@ export default function HomeScreen() {
             </View>
           </TouchableOpacity>
 
+          {/* Daily Reset */}
+          {Platform.OS === 'ios' ? (
+            <View style={styles.dailyResetCardWrapper}>
+              <View style={styles.dailyResetCard}>
+                {(() => {
+                  const now = Date.now() / 1000;
+                  const unlockedUntil = Number(blockingState?.dailyUnlockedUntil ?? 0);
+                  const locked = unlockedUntil <= now;
+                  const resetTime = String(blockingState?.dailyResetTime ?? '08:00');
+
+                  return (
+                    <>
+                      <Text style={styles.dailyResetTitle}>
+                        {locked ? '🔒 Tes apps sensibles sont verrouillées.' : '✅ Tes apps sensibles sont déverrouillées.'}
+                      </Text>
+                      <Text style={styles.dailyResetSubtitle}>
+                        {locked
+                          ? `Fais ton Daily Reset dans Sobre pour les déverrouiller jusqu'à demain ${resetTime}.`
+                          : `Elles resteront déverrouillées jusqu'à demain ${resetTime}.`}
+                      </Text>
+                      {locked ? (
+                        <TouchableOpacity style={styles.dailyResetButton} onPress={() => router.push('/daily-reset')}>
+                          <Text style={styles.dailyResetButtonText}>Faire mon Daily Reset</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                    </>
+                  );
+                })()}
+              </View>
+            </View>
+          ) : null}
+
           {/* 4. Missions du jour */}
           <DailyMissions />
 
@@ -421,30 +418,7 @@ export default function HomeScreen() {
             <OpenBlockPickerButton
               style={styles.blockSitesButton}
               textStyle={styles.blockSitesText}
-              onSelectionChange={setFamilySelection}
             />
-            {familySelection?.applicationsCount ? (
-              <View style={styles.shieldActions}>
-                <TouchableOpacity
-                  style={[styles.shieldActionButton, styles.shieldActionPrimary]}
-                  onPress={handleApplyShield}
-                  disabled={shieldBusy}
-                >
-                  <Text style={styles.shieldActionTextPrimary}>
-                    {shieldBusy ? 'Activation...' : 'Activer le blocage'}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.shieldActionButton, styles.shieldActionSecondary]}
-                  onPress={handleClearShield}
-                  disabled={shieldBusy}
-                >
-                  <Text style={styles.shieldActionTextSecondary}>
-                    {shieldBusy ? '...' : 'Désactiver'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            ) : null}
           </View>
 
         </ScrollView>
@@ -503,6 +477,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 20,
     paddingHorizontal: 24,
+    position: 'relative',
   },
   logoImage: {
     width: 120,
@@ -515,6 +490,67 @@ const styles = StyleSheet.create({
     color: '#DDDDDD',
     marginTop: 2,
     textAlign: 'center',
+  },
+  appOpenStreakPill: {
+    position: 'absolute',
+    top: 14,
+    right: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  appOpenStreakEmoji: {
+    fontSize: 14,
+    lineHeight: 16,
+  },
+  appOpenStreakText: {
+    fontSize: 12,
+    fontFamily: 'Inter-SemiBold',
+    color: 'rgba(255,255,255,0.86)',
+  },
+
+  dailyResetCardWrapper: {
+    marginHorizontal: 24,
+    marginTop: 14,
+    marginBottom: 24,
+  },
+  dailyResetCard: {
+    backgroundColor: '#1A1A1A',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.18)',
+  },
+  dailyResetTitle: {
+    fontSize: 15,
+    fontFamily: 'Inter-SemiBold',
+    color: '#FFFFFF',
+    marginBottom: 6,
+  },
+  dailyResetSubtitle: {
+    fontSize: 13,
+    fontFamily: 'Inter-Regular',
+    color: '#A3A3A3',
+    lineHeight: 18,
+  },
+  dailyResetButton: {
+    marginTop: 12,
+    backgroundColor: '#FFD700',
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dailyResetButtonText: {
+    color: '#000000',
+    fontSize: 15,
+    fontFamily: 'Inter-Bold',
   },
 
   // 2. Bloc central avec titre

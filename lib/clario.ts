@@ -3,7 +3,9 @@ export type ClarioChatMessage = {
   content: string;
 };
 
-const OPENAI_API_KEY = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
+import { getExpoPublicEnv } from './publicEnv';
+
+const OPENAI_API_KEY = getExpoPublicEnv('EXPO_PUBLIC_OPENAI_API_KEY');
 
 const SYSTEM_PROMPT: ClarioChatMessage = {
   role: 'system',

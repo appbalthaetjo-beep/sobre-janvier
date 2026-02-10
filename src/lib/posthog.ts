@@ -1,8 +1,9 @@
 import { Platform } from 'react-native';
 import PostHog from 'posthog-react-native';
+import { getExpoPublicEnv } from '@/lib/publicEnv';
 
-const POSTHOG_API_KEY = process.env.EXPO_PUBLIC_POSTHOG_KEY?.trim() ?? '';
-const POSTHOG_HOST = process.env.EXPO_PUBLIC_POSTHOG_HOST?.trim() ?? '';
+const POSTHOG_API_KEY = getExpoPublicEnv('EXPO_PUBLIC_POSTHOG_KEY')?.trim() ?? '';
+const POSTHOG_HOST = getExpoPublicEnv('EXPO_PUBLIC_POSTHOG_HOST')?.trim() ?? '';
 
 let client: PostHog | null = null;
 let initPromise: Promise<PostHog | null> | null = null;

@@ -5,12 +5,74 @@ import UIKit
 
 final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
   private let appGroupSuiteName = "group.com.balthazar.sobre"
+  private let eveningEnabledKey = "eveningEnabled"
   private let eveningStartKey = "eveningStart"
   private let eveningEndKey = "eveningEnd"
-  private let frictionStartKey = "eveningFrictionStart"
   private let dailyEnabledKey = "dailyEnabled"
   private let dailyUnlockedUntilKey = "dailyUnlockedUntil"
   private let dailyNotifLastSentAtKey = "dailyNotifLastSentAt"
+
+  private func sobreWordmarkImage() -> UIImage? {
+    if let image = UIImage(named: "sobre_wordmark") {
+      return image.withRenderingMode(.alwaysOriginal)
+    }
+    if let path = Bundle.main.path(forResource: "sobre_wordmark", ofType: "png"),
+       let image = UIImage(contentsOfFile: path) {
+      return image.withRenderingMode(.alwaysOriginal)
+    }
+    return nil
+  }
+
+  private func sobreLogoImage() -> UIImage? {
+    if let image = UIImage(named: "sobre_logo") {
+      return image.withRenderingMode(.alwaysOriginal)
+    }
+    if let path = Bundle.main.path(forResource: "sobre_logo", ofType: "png"),
+       let image = UIImage(contentsOfFile: path) {
+      return image.withRenderingMode(.alwaysOriginal)
+    }
+    return nil
+  }
+
+  private func sobreShieldLogoImage() -> UIImage? {
+    if let image = UIImage(named: "sobre_shield_logo") {
+      return image.withRenderingMode(.alwaysOriginal)
+    }
+    if let path = Bundle.main.path(forResource: "sobre_shield_logo", ofType: "png"),
+       let image = UIImage(contentsOfFile: path) {
+      return image.withRenderingMode(.alwaysOriginal)
+    }
+    return nil
+  }
+
+  private func shieldAppIconImage() -> UIImage? {
+    guard let base = sobreLogoImage() else {
+      return nil
+    }
+
+    // The Shield icon slot is small and iOS may add its own padding.
+    // To make the app icon appear visually larger, we draw it slightly "oversized"
+    // into a square canvas so it fills more of the available area.
+    let canvasSize = CGSize(width: 256, height: 256)
+    let oversize: CGFloat = 1.18
+    let drawSize = CGSize(width: canvasSize.width * oversize, height: canvasSize.height * oversize)
+    let origin = CGPoint(x: (canvasSize.width - drawSize.width) / 2, y: (canvasSize.height - drawSize.height) / 2)
+    let drawRect = CGRect(origin: origin, size: drawSize)
+
+    let format = UIGraphicsImageRendererFormat.default()
+    format.opaque = false
+    format.scale = 2
+    let renderer = UIGraphicsImageRenderer(size: canvasSize, format: format)
+    let image = renderer.image { _ in
+      base.draw(in: drawRect)
+    }
+    return image.withRenderingMode(.alwaysOriginal)
+  }
+
+  private func shieldIconImage() -> UIImage? {
+    // Use the dedicated Shield logo for both shields (Daily + Night), then fall back to the app icon.
+    return sobreShieldLogoImage() ?? shieldAppIconImage() ?? sobreLogoImage() ?? sobreWordmarkImage()
+  }
 
   override func configuration(shielding application: Application) -> ShieldConfiguration {
     return configurationForCurrentMode()
@@ -28,46 +90,60 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
     let defaults = appGroupDefaults()
     ensureScheduleDefaults(defaults)
     let isEvening = isWithinEveningWindow(now: Date(), defaults: defaults)
-    let eveningEnabled = defaults.object(forKey: "eveningEnabled") as? Bool ?? true
+    let eveningEnabled = defaults.bool(forKey: eveningEnabledKey)
 
     if isEvening && eveningEnabled {
-      let remaining = remainingFrictionSeconds(defaults: defaults)
-      let subtitle = remaining > 0 ? "Respire \(remaining) secondes…" : "Respire 5 secondes…"
+      let subtitle =
+        "Tu as choisi de protéger tes soirées.\n\n" +
+        "Expire.\n\n" +
+        "Fais attention à ta consommation."
       return ShieldConfiguration(
-        backgroundBlurStyle: .systemUltraThinMaterialDark,
-        icon: .init(systemName: "moon.stars.fill"),
+        backgroundBlurStyle: .none,
+        backgroundColor: .black,
+        icon: shieldIconImage(),
         title: .init(text: "Mode Nuit activé", color: .white),
         subtitle: .init(text: subtitle, color: .white),
-        primaryButtonLabel: .init(text: "Continuer quand même", color: .white),
-        secondaryButtonLabel: .init(text: "Aide-moi (SOS)", color: .white)
+        primaryButtonLabel: .init(text: "Continuer quand même", color: .black),
+        primaryButtonBackgroundColor: .systemYellow,
+        secondaryButtonLabel: .init(text: "Annuler", color: .systemYellow)
       )
     }
 
     let dailyEnabled = defaults.object(forKey: dailyEnabledKey) as? Bool ?? true
     let unlockedUntil = defaults.double(forKey: dailyUnlockedUntilKey)
-    let isLocked = unlockedUntil <= Date().timeIntervalSince1970
-
-    if dailyEnabled && isLocked {
+    // Defensive cleanup: if the unlock window is expired, reset it so the shield UI is consistent.
+    if unlockedUntil > 0 && Date().timeIntervalSince1970 >= unlockedUntil {
+      defaults.set(0, forKey: dailyUnlockedUntilKey)
+    }
+    // If we're not in evening mode and the system is showing a Shield, prefer our custom "Daily Reset"
+    // UI (with the primary button) instead of falling back to a generic "Accès limité" UI.
+    // The shield should normally not be presented while unlocked, but if it is, showing our UI still
+    // preserves the expected path for users.
+    if dailyEnabled {
       let lastSentAt = defaults.double(forKey: dailyNotifLastSentAtKey)
       let now = Date().timeIntervalSince1970
       let shouldShowResend = lastSentAt > 0 && (now - lastSentAt) < 300
       let primaryLabel = shouldShowResend ? "Je n’ai pas reçu la notification ?" : "Lancer le check-in"
       return ShieldConfiguration(
-        backgroundBlurStyle: .systemUltraThinMaterialDark,
-        icon: .init(systemName: "lock.shield"),
+        backgroundBlurStyle: .none,
+        backgroundColor: .black,
+        icon: shieldIconImage(),
         title: .init(text: "Tes apps sensibles sont verrouillées.", color: .white),
         subtitle: .init(text: "Fais ton check-in Sobre pour les déverrouiller aujourd’hui.", color: .white),
-        primaryButtonLabel: .init(text: primaryLabel, color: .white)
+        primaryButtonLabel: .init(text: primaryLabel, color: .black),
+        primaryButtonBackgroundColor: .systemYellow
       )
     }
 
     return ShieldConfiguration(
-      backgroundBlurStyle: .systemUltraThinMaterialDark,
-      icon: .init(systemName: "lock.fill"),
+      backgroundBlurStyle: .none,
+      backgroundColor: .black,
+      icon: shieldIconImage(),
       title: .init(text: "Accès limité", color: .white),
       subtitle: .init(text: "Cette fonctionnalité est bloquée.", color: .white),
-      primaryButtonLabel: .init(text: "Fermer", color: .white),
-      secondaryButtonLabel: .init(text: "Annuler", color: .white)
+      primaryButtonLabel: .init(text: "Fermer", color: .black),
+      primaryButtonBackgroundColor: .systemYellow,
+      secondaryButtonLabel: .init(text: "Annuler", color: .systemYellow)
     )
   }
 
@@ -85,8 +161,8 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
     if defaults.object(forKey: dailyNotifLastSentAtKey) == nil {
       defaults.set(0, forKey: dailyNotifLastSentAtKey)
     }
-    if defaults.object(forKey: "eveningEnabled") == nil {
-      defaults.set(true, forKey: "eveningEnabled")
+    if defaults.object(forKey: eveningEnabledKey) == nil {
+      defaults.set(false, forKey: eveningEnabledKey)
     }
     if defaults.string(forKey: eveningStartKey) == nil {
       defaults.set("22:00", forKey: eveningStartKey)
@@ -94,18 +170,6 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
     if defaults.string(forKey: eveningEndKey) == nil {
       defaults.set("07:00", forKey: eveningEndKey)
     }
-  }
-
-  private func remainingFrictionSeconds(defaults: UserDefaults) -> Int {
-    let now = Date().timeIntervalSince1970
-    let start = defaults.double(forKey: frictionStartKey)
-    if start <= 0 || now - start > 30 {
-      defaults.set(now, forKey: frictionStartKey)
-      return 5
-    }
-    let elapsed = max(0, now - start)
-    let remaining = max(0, 5 - Int(elapsed))
-    return remaining
   }
 
   private func isWithinEveningWindow(now: Date, defaults: UserDefaults) -> Bool {

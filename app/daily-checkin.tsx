@@ -3,7 +3,7 @@ import { router } from 'expo-router';
 
 export default function DailyCheckinRedirect() {
   useEffect(() => {
-    router.replace('/blocking/daily-checkin');
+    router.replace('/daily-reset');
   }, []);
 
   return null;

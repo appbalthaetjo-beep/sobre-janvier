@@ -14,6 +14,7 @@ import {
   setDailyUnlockedUntil,
 } from 'expo-family-controls';
 import { router } from 'expo-router';
+import { ensureDailyResetMorningReminderScheduled } from '@/src/dailyResetReminder';
 
 const { width } = Dimensions.get('window');
 
@@ -51,6 +52,7 @@ export default function DailyCheckinScreen() {
       const nextUnlock = getNextResetTimestamp(resetTime);
       await setDailyUnlockedUntil(nextUnlock);
       await applyCurrentShieldsNow();
+      await ensureDailyResetMorningReminderScheduled({ requestPermission: false });
       setStep(2);
     } catch (error: any) {
       Alert.alert('Déblocage', error?.message ?? 'Impossible de débloquer.');
@@ -114,11 +116,11 @@ export default function DailyCheckinScreen() {
 function getNextResetTimestamp(time: string) {
   const [hours, minutes] = time.split(':').map((val) => parseInt(val, 10));
   const now = new Date();
-  const target = new Date();
+  // Unlock until tomorrow at the configured reset time (e.g. 08:00),
+  // so the user gets a full day regardless of when they complete the check-in.
+  const target = new Date(now);
+  target.setDate(target.getDate() + 1);
   target.setHours(hours, minutes, 0, 0);
-  if (target.getTime() <= now.getTime()) {
-    target.setDate(target.getDate() + 1);
-  }
   return target.getTime() / 1000;
 }
 

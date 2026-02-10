@@ -12,10 +12,7 @@ export default function BlockingIndexScreen() {
         <Text style={styles.cardSubtitle}>Configurer la réinitialisation quotidienne</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.card} onPress={() => router.push('/blocking/evening')}>
-        <Text style={styles.cardTitle}>Mode Nuit</Text>
-        <Text style={styles.cardSubtitle}>Configurer le blocage du soir</Text>
-      </TouchableOpacity>
+      {/* Mode Nuit disabled for now */}
     </View>
   );
 }

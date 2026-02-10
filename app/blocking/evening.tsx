@@ -11,12 +11,14 @@ import {
 } from 'react-native';
 import {
   getEveningSelection,
+  getSavedSelection,
   getScheduleSettings,
-  openEveningPicker,
+  openFamilyActivityPicker,
   setEveningEnabled,
   setEveningSchedule,
   type SerializedSelection,
 } from 'expo-family-controls';
+import { isFamilyControlsPickerCanceled } from '@/src/familyControlsErrors';
 
 export default function BlockingEveningScreen() {
   const [enabled, setEnabled] = React.useState(true);
@@ -36,7 +38,7 @@ export default function BlockingEveningScreen() {
         setEndTime(settings.eveningEnd);
         setStartInput(settings.eveningStart);
         setEndInput(settings.eveningEnd);
-        const sel = await getEveningSelection();
+        const sel = (await getSavedSelection()) ?? (await getEveningSelection());
         setSelection(sel);
       } catch (error) {
         console.log('[BlockingEvening] Load error:', error);
@@ -71,9 +73,12 @@ export default function BlockingEveningScreen() {
 
   const handlePickApps = async () => {
     try {
-      const sel = await openEveningPicker();
+      const sel = await openFamilyActivityPicker();
       setSelection(sel);
     } catch (error: any) {
+      if (isFamilyControlsPickerCanceled(error)) {
+        return;
+      }
       Alert.alert('Sélection', error?.message ?? 'Impossible d’ouvrir le picker.');
     }
   };

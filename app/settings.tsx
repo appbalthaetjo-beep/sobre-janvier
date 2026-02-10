@@ -122,6 +122,7 @@ Cordialement`);
     }
   };
 
+
   const handleRestoreProgress = () => {
     setRestoreEmail('');
     setRestoreMessage(null);

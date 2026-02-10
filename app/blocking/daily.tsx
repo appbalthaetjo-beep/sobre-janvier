@@ -11,12 +11,14 @@ import {
 } from 'react-native';
 import {
   getDailySelection,
+  getSavedSelection,
   getScheduleSettings,
-  openDailyPicker,
+  openFamilyActivityPicker,
   setDailyEnabled,
   setDailyResetTime,
   type SerializedSelection,
 } from 'expo-family-controls';
+import { isFamilyControlsPickerCanceled } from '@/src/familyControlsErrors';
 
 export default function BlockingDailyScreen() {
   const [enabled, setEnabled] = React.useState(true);
@@ -32,7 +34,7 @@ export default function BlockingDailyScreen() {
         setEnabled(settings.dailyEnabled);
         setResetTime(settings.dailyResetTime);
         setTimeInput(settings.dailyResetTime);
-        const sel = await getDailySelection();
+        const sel = (await getSavedSelection()) ?? (await getDailySelection());
         setSelection(sel);
       } catch (error) {
         console.log('[BlockingDaily] Load error:', error);
@@ -66,9 +68,12 @@ export default function BlockingDailyScreen() {
 
   const handlePickApps = async () => {
     try {
-      const sel = await openDailyPicker();
+      const sel = await openFamilyActivityPicker();
       setSelection(sel);
     } catch (error: any) {
+      if (isFamilyControlsPickerCanceled(error)) {
+        return;
+      }
       Alert.alert('Sélection', error?.message ?? 'Impossible d’ouvrir le picker.');
     }
   };

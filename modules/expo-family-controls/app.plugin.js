@@ -9,6 +9,7 @@ const EXTENSIONS = [
     groupPath: '../modules/expo-family-controls/ios/ShieldConfigurationExtension',
     plist: 'Info.plist',
     sources: ['ShieldConfigurationExtension.swift'],
+    resources: ['sobre_wordmark.png', 'sobre_logo.png', 'sobre_shield_logo.png'],
     bundleIdSuffix: '.shieldconfiguration',
   },
   {
@@ -16,6 +17,7 @@ const EXTENSIONS = [
     groupPath: '../modules/expo-family-controls/ios/ShieldActionExtension',
     plist: 'Info.plist',
     sources: ['ShieldActionExtension.swift'],
+    resources: [],
     bundleIdSuffix: '.shieldaction',
   },
   {
@@ -23,6 +25,7 @@ const EXTENSIONS = [
     groupPath: '../modules/expo-family-controls/ios/DeviceActivityMonitorExtension',
     plist: 'Info.plist',
     sources: ['DeviceActivityMonitorExtension.swift'],
+    resources: [],
     bundleIdSuffix: '.deviceactivitymonitor',
   },
 ];
@@ -31,6 +34,16 @@ const REQUIRED_FRAMEWORKS = [
   'FamilyControls.framework',
   'DeviceActivity.framework',
 ];
+
+function ensureNamedGroup(project, mainGroupId, name, groupPath) {
+  const existing = project.pbxGroupByName(name);
+  if (existing) return existing;
+  const group = project.addPbxGroup([], name, groupPath);
+  if (group?.uuid && mainGroupId) {
+    project.addToPbxGroup(group.uuid, mainGroupId);
+  }
+  return group;
+}
 
 function ensureExtensionEntitlements(projectRoot, projectName) {
   const targetDir = path.join(projectRoot, 'ios', projectName);
@@ -61,6 +74,9 @@ function addExtensionTargets(config, project) {
   }
 
   const mainGroupId = project.getFirstProject().firstProject.mainGroup;
+  // The `xcode` library assumes a "Resources" PBXGroup exists when calling `addResourceFile`.
+  // Expo projects don't always have it, so ensure it's present to avoid prebuild crashes.
+  ensureNamedGroup(project, mainGroupId, 'Resources', 'Resources');
 
   EXTENSIONS.forEach((ext) => {
     const target = findTarget(project, ext.name) || project.addTarget(
@@ -75,6 +91,7 @@ function addExtensionTargets(config, project) {
     dedupeBuildPhases(project, targetUuid, ext.name);
     ensureGroup(project, mainGroupId, ext);
     addSourceFiles(project, targetUuid, ext);
+    addResourceFiles(config.modRequest.projectRoot, projectName, project, targetUuid, ext);
     addFrameworks(project, targetUuid);
     dedupeBuildPhases(project, targetUuid, ext.name);
     updateBuildSettings(project, targetUuid, ext, projectName, bundleId, teamId);
@@ -104,6 +121,9 @@ function ensureBuildPhases(project, targetUuid) {
   if (!existing.has('Frameworks')) {
     project.addBuildPhase([], 'PBXFrameworksBuildPhase', 'Frameworks', targetUuid);
   }
+  if (!existing.has('Resources')) {
+    project.addBuildPhase([], 'PBXResourcesBuildPhase', 'Resources', targetUuid);
+  }
 }
 
 function ensureGroup(project, mainGroupId, ext) {
@@ -124,6 +144,52 @@ function addSourceFiles(project, targetUuid, ext) {
   });
 
   project.addFile(ext.plist, groupKey);
+}
+
+function addResourceFiles(projectRoot, projectName, project, targetUuid, ext) {
+  const groupKey = getGroupKeyByName(project, ext.name);
+  if (!groupKey) {
+    console.warn(`[expo-family-controls] Skip resources: missing Xcode group for ${ext.name}`);
+    return;
+  }
+  if (!ext.resources || ext.resources.length === 0) return;
+
+  ext.resources.forEach((resourcePath) => {
+    if (!resourcePath) {
+      console.warn('[expo-family-controls] Skip missing resource: <undefined>');
+      return;
+    }
+
+    // Don't assume a fixed filesystem layout here: in prebuild/build environments
+    // `ios/` may be generated and the extension group path can be outside the iOS directory.
+    // We'll attempt a few common candidate locations for a gentle existence check, but never
+    // fail the prebuild if we can't find the file.
+    const candidates = [
+      path.resolve(projectRoot, 'ios', projectName, ext.groupPath, resourcePath),
+      path.resolve(projectRoot, 'ios', ext.groupPath, resourcePath),
+      path.resolve(projectRoot, ext.groupPath, resourcePath),
+      path.resolve(projectRoot, ext.groupPath.replace(/^\.\.[\\/]/, ''), resourcePath),
+    ];
+    const existsSomewhere = candidates.some((p) => {
+      try {
+        return fs.existsSync(p);
+      } catch {
+        return false;
+      }
+    });
+    if (!existsSomewhere) {
+      console.warn('[expo-family-controls] Skip missing resource:', resourcePath);
+      // Still try to add it to the Xcode project (some builds can resolve it relative to groupPath).
+    }
+
+    if (hasResourceFile(project, targetUuid, resourcePath)) return;
+
+    try {
+      project.addResourceFile(resourcePath, { target: targetUuid }, groupKey);
+    } catch (e) {
+      console.warn('[expo-family-controls] Failed to add resource, skipping:', resourcePath, e?.message || e);
+    }
+  });
 }
 
 function addFrameworks(project, targetUuid) {
@@ -157,6 +223,21 @@ function hasSourceFile(project, targetUuid, sourcePath) {
     if (!ref || !ref.path) return false;
     const refPath = String(ref.path).replace(/"/g, '');
     return refPath === sourcePath;
+  });
+}
+
+function hasResourceFile(project, targetUuid, resourcePath) {
+  const resources = project.pbxResourcesBuildPhaseObj(targetUuid);
+  if (!resources || !resources.files) return false;
+  const buildFiles = project.hash.project.objects['PBXBuildFile'] || {};
+  const fileRefs = project.hash.project.objects['PBXFileReference'] || {};
+  return resources.files.some((entry) => {
+    const buildFile = buildFiles[entry.value];
+    if (!buildFile || !buildFile.fileRef) return false;
+    const ref = fileRefs[buildFile.fileRef];
+    if (!ref || !ref.path) return false;
+    const refPath = String(ref.path).replace(/"/g, '');
+    return refPath === resourcePath;
   });
 }
 
