@@ -3,6 +3,7 @@ import {
   Alert,
   FlatList,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   SafeAreaView,
   StyleSheet,
@@ -11,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Send } from 'lucide-react-native';
 
 import { useAuth } from '@/hooks/useAuth';
@@ -27,6 +29,7 @@ interface CommunityPost {
 }
 
 export default function CommunityScreen() {
+  const DISCORD_INVITE = 'https://discord.gg/hYu3WP7D';
   const { user } = useAuth();
   const [inputValue, setInputValue] = useState('');
   const [sending, setSending] = useState(false);
@@ -155,8 +158,19 @@ export default function CommunityScreen() {
           ListHeaderComponent={
             <View>
               <View style={styles.headerTop}>
-                <Text style={styles.heading}>Communauté</Text>
-                <Text style={styles.subtitle}>Ensemble, nous sommes plus forts</Text>
+                <View style={styles.headerTextBlock}>
+                  <Text style={styles.heading}>Communauté</Text>
+                  <Text style={styles.subtitle}>Ensemble, nous sommes plus forts</Text>
+                </View>
+
+                <TouchableOpacity
+                  accessibilityRole="link"
+                  accessibilityLabel="Rejoindre le Discord"
+                  onPress={() => Linking.openURL(DISCORD_INVITE)}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                >
+                  <MaterialIcons name="discord" size={32} color="#7289da" />
+                </TouchableOpacity>
               </View>
 
               <View style={styles.tabRow}>
@@ -314,8 +328,15 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   listContent: { paddingHorizontal: 24, paddingBottom: 32 },
   headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingTop: 16,
     paddingBottom: 20,
+  },
+  headerTextBlock: {
+    flex: 1,
+    marginRight: 12,
   },
   heading: {
     color: '#FFFFFF',

@@ -74,6 +74,12 @@ function addExtensionTargets(config, project) {
   }
 
   const mainGroupId = project.getFirstProject().firstProject.mainGroup;
+  const mainTarget = project.getFirstTarget();
+
+  if (!mainTarget) {
+    console.warn('[expo-family-controls] No main iOS target found; extensions will not be embedded.');
+  }
+
   // The `xcode` library assumes a "Resources" PBXGroup exists when calling `addResourceFile`.
   // Expo projects don't always have it, so ensure it's present to avoid prebuild crashes.
   ensureNamedGroup(project, mainGroupId, 'Resources', 'Resources');
@@ -95,9 +101,71 @@ function addExtensionTargets(config, project) {
     addFrameworks(project, targetUuid);
     dedupeBuildPhases(project, targetUuid, ext.name);
     updateBuildSettings(project, targetUuid, ext, projectName, bundleId, teamId);
+
+    // Embed the app extension into the main app target so it is bundled on device.
+    if (mainTarget) {
+      embedExtensionProduct(project, mainTarget.uuid, targetUuid, ext.name);
+    }
   });
 
   return project;
+}
+
+function embedExtensionProduct(project, hostTargetUuid, extTargetUuid, extName) {
+  const extTarget = project.pbxNativeTargetSection()[extTargetUuid];
+  if (!extTarget) return;
+
+  const productRefId = extTarget.productReference;
+  if (!productRefId) return;
+
+  const fileRefs = project.hash.project.objects['PBXFileReference'] || {};
+  const productFile = fileRefs[productRefId];
+  const productPath = (productFile && productFile.path) ? String(productFile.path).replace(/"/g, '') : `${extName}.appex`;
+
+  const buildFiles = project.hash.project.objects['PBXBuildFile'] || (project.hash.project.objects['PBXBuildFile'] = {});
+  const copyPhases = project.hash.project.objects['PBXCopyFilesBuildPhase'] || (project.hash.project.objects['PBXCopyFilesBuildPhase'] = {});
+
+  // Find or create the Embed App Extensions phase.
+  let phaseId = null;
+  for (const key in copyPhases) {
+    const phase = copyPhases[key];
+    if (phase && phase.name === '"Embed App Extensions"') {
+      phaseId = key;
+      break;
+    }
+  }
+
+  if (!phaseId) {
+    phaseId = project.addBuildPhase([], 'PBXCopyFilesBuildPhase', 'Embed App Extensions', hostTargetUuid, {
+      dstSubfolderSpec: '13', // PlugIns
+      name: '"Embed App Extensions"',
+    });
+  }
+  if (!phaseId) return;
+
+  // refresh after possible creation
+  const phase = project.hash.project.objects['PBXCopyFilesBuildPhase'][phaseId];
+  if (!phase) return;
+  phase.files = phase.files || [];
+
+  // Check if already present
+  const already = phase.files.some((f) => {
+    const bf = buildFiles[f.value];
+    return bf && bf.fileRef === productRefId;
+  });
+  if (already) return;
+
+  // Create a PBXBuildFile entry for the appex product.
+  const buildFileUuid = project.generateUuid();
+  buildFiles[buildFileUuid] = {
+    isa: 'PBXBuildFile',
+    fileRef: productRefId,
+    settings: { ATTRIBUTES: ['RemoveHeadersOnCopy', 'CodeSignOnCopy'] },
+  };
+  buildFiles[`${buildFileUuid}_comment`] = `${extName}.appex in Embed App Extensions`;
+
+  // Attach to the copy phase.
+  phase.files.push({ value: buildFileUuid, comment: `${extName}.appex in Embed App Extensions` });
 }
 
 function findTarget(project, name) {

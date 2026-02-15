@@ -5,9 +5,12 @@ import UIKit
 
 final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
   private let appGroupSuiteName = "group.com.balthazar.sobre"
+
   private let eveningEnabledKey = "eveningEnabled"
   private let eveningStartKey = "eveningStart"
   private let eveningEndKey = "eveningEnd"
+  private let emergencyUntilKey = "emergencyUntil"
+
   private let dailyEnabledKey = "dailyEnabled"
   private let dailyUnlockedUntilKey = "dailyUnlockedUntil"
   private let dailyNotifLastSentAtKey = "dailyNotifLastSentAt"
@@ -51,7 +54,7 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
     }
 
     // The Shield icon slot is small and iOS may add its own padding.
-    // To make the app icon appear visually larger, we draw it slightly "oversized"
+    // To make the app icon appear visually larger, we draw it slightly oversized
     // into a square canvas so it fills more of the available area.
     let canvasSize = CGSize(width: 256, height: 256)
     let oversize: CGFloat = 1.18
@@ -75,35 +78,57 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
   }
 
   override func configuration(shielding application: Application) -> ShieldConfiguration {
-    return configurationForCurrentMode()
+    return configurationForContext()
   }
 
   func configuration(shielding category: ActivityCategory) -> ShieldConfiguration {
-    return configurationForCurrentMode()
+    return configurationForContext()
   }
 
   override func configuration(shielding webDomain: WebDomain) -> ShieldConfiguration {
-    return configurationForCurrentMode()
+    return configurationForContext()
   }
 
-  private func configurationForCurrentMode() -> ShieldConfiguration {
+  private func configurationForContext() -> ShieldConfiguration {
     let defaults = appGroupDefaults()
     ensureScheduleDefaults(defaults)
-    let isEvening = isWithinEveningWindow(now: Date(), defaults: defaults)
-    let eveningEnabled = defaults.bool(forKey: eveningEnabledKey)
 
-    if isEvening && eveningEnabled {
+    let now = Date().timeIntervalSince1970
+
+    let emergencyUntil = defaults.double(forKey: emergencyUntilKey)
+    if emergencyUntil > now {
       let subtitle =
-        "Tu as choisi de protéger tes soirées.\n\n" +
-        "Expire.\n\n" +
-        "Fais attention à ta consommation."
+        "Blocage d'urgence : tiens bon.\n\n" +
+        "Tes apps sensibles sont bloquees 10 minutes pour t'aider a respirer et reprendre le controle."
+
       return ShieldConfiguration(
         backgroundBlurStyle: .none,
         backgroundColor: .black,
         icon: shieldIconImage(),
-        title: .init(text: "Mode Nuit activé", color: .white),
+        title: .init(text: "Blocage d'urgence 10 min", color: .white),
         subtitle: .init(text: subtitle, color: .white),
-        primaryButtonLabel: .init(text: "Continuer quand même", color: .black),
+        primaryButtonLabel: .init(text: "OK", color: .black),
+        primaryButtonBackgroundColor: .systemYellow,
+        secondaryButtonLabel: .init(text: "Annuler", color: .systemYellow)
+      )
+    }
+
+    let isEvening = isWithinEveningWindow(now: Date(), defaults: defaults)
+    let eveningEnabled = defaults.bool(forKey: eveningEnabledKey)
+    if isEvening && eveningEnabled {
+      let subtitle =
+        "Tu as choisi de proteger tes soirees.\n\n" +
+        "Expire.\n\n" +
+        "Fais attention a ta consommation.\n\n" +
+        "Apres avoir continue, retape sur l'icone de l'app pour l'ouvrir."
+
+      return ShieldConfiguration(
+        backgroundBlurStyle: .none,
+        backgroundColor: .black,
+        icon: shieldIconImage(),
+        title: .init(text: "Mode Nuit active", color: .white),
+        subtitle: .init(text: subtitle, color: .white),
+        primaryButtonLabel: .init(text: "Continuer (retape)", color: .black),
         primaryButtonBackgroundColor: .systemYellow,
         secondaryButtonLabel: .init(text: "Annuler", color: .systemYellow)
       )
@@ -111,25 +136,23 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
 
     let dailyEnabled = defaults.object(forKey: dailyEnabledKey) as? Bool ?? true
     let unlockedUntil = defaults.double(forKey: dailyUnlockedUntilKey)
+
     // Defensive cleanup: if the unlock window is expired, reset it so the shield UI is consistent.
-    if unlockedUntil > 0 && Date().timeIntervalSince1970 >= unlockedUntil {
+    if unlockedUntil > 0 && now >= unlockedUntil {
       defaults.set(0, forKey: dailyUnlockedUntilKey)
     }
-    // If we're not in evening mode and the system is showing a Shield, prefer our custom "Daily Reset"
-    // UI (with the primary button) instead of falling back to a generic "Accès limité" UI.
-    // The shield should normally not be presented while unlocked, but if it is, showing our UI still
-    // preserves the expected path for users.
-    if dailyEnabled {
+
+    let isDailyLocked = dailyEnabled && (unlockedUntil == 0 || unlockedUntil <= now)
+    if isDailyLocked {
       let lastSentAt = defaults.double(forKey: dailyNotifLastSentAtKey)
-      let now = Date().timeIntervalSince1970
       let shouldShowResend = lastSentAt > 0 && (now - lastSentAt) < 300
-      let primaryLabel = shouldShowResend ? "Je n’ai pas reçu la notification ?" : "Lancer le check-in"
+      let primaryLabel = shouldShowResend ? "Je n'ai pas recu la notification ?" : "Lancer le check-in"
       return ShieldConfiguration(
         backgroundBlurStyle: .none,
         backgroundColor: .black,
         icon: shieldIconImage(),
-        title: .init(text: "Tes apps sensibles sont verrouillées.", color: .white),
-        subtitle: .init(text: "Fais ton check-in Sobre pour les déverrouiller aujourd’hui.", color: .white),
+        title: .init(text: "Tes apps sensibles sont verrouillees.", color: .white),
+        subtitle: .init(text: "Fais ton check-in Sobre pour les deverrouiller aujourd'hui.", color: .white),
         primaryButtonLabel: .init(text: primaryLabel, color: .black),
         primaryButtonBackgroundColor: .systemYellow
       )
@@ -139,8 +162,8 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
       backgroundBlurStyle: .none,
       backgroundColor: .black,
       icon: shieldIconImage(),
-      title: .init(text: "Accès limité", color: .white),
-      subtitle: .init(text: "Cette fonctionnalité est bloquée.", color: .white),
+      title: .init(text: "Acces limite", color: .white),
+      subtitle: .init(text: "Cette fonctionnalite est bloquee.", color: .white),
       primaryButtonLabel: .init(text: "Fermer", color: .black),
       primaryButtonBackgroundColor: .systemYellow,
       secondaryButtonLabel: .init(text: "Annuler", color: .systemYellow)
@@ -170,6 +193,9 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
     if defaults.string(forKey: eveningEndKey) == nil {
       defaults.set("07:00", forKey: eveningEndKey)
     }
+    if defaults.object(forKey: emergencyUntilKey) == nil {
+      defaults.set(0, forKey: emergencyUntilKey)
+    }
   }
 
   private func isWithinEveningWindow(now: Date, defaults: UserDefaults) -> Bool {
@@ -179,6 +205,7 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
           let endMinutes = minutesFromTime(endString) else {
       return false
     }
+
     let calendar = Calendar.current
     let components = calendar.dateComponents([.hour, .minute], from: now)
     let nowMinutes = (components.hour ?? 0) * 60 + (components.minute ?? 0)

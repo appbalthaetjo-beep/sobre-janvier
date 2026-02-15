@@ -1,21 +1,22 @@
-import React from 'react';
+﻿import React from 'react';
 import { Alert, Image, Platform, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft } from 'lucide-react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 
 import {
   applyCurrentShieldsNow,
-  clearEveningOverride,
   getAuthorizationStatus,
   getDailySelection,
   getEveningSelection,
+  getBlockState,
   getSavedSelection,
   getScheduleSettings,
   openFamilyActivityPicker,
   requestAuthorization,
   setDailyEnabled,
-  setEveningEnabled,
+  startEmergencyBlock,
+  clearEmergencyBlock,
 } from 'expo-family-controls';
 import { isFamilyControlsPickerCanceled } from '@/src/familyControlsErrors';
 
@@ -27,21 +28,42 @@ export default function BlockingSettingsScreen() {
   const [nightModeEnabled, setNightModeEnabledState] = React.useState(false);
   const [nightStart, setNightStart] = React.useState('22:00');
   const [nightEnd, setNightEnd] = React.useState('07:00');
-  const [webFilterEnabled, setWebFilterEnabled] = React.useState(false);
   const [appsCount, setAppsCount] = React.useState<number>(0);
   const [loading, setLoading] = React.useState(false);
+
+  const ensureSelectionExists = React.useCallback(async (): Promise<number> => {
+    // Try existing selections first
+    const existing =
+      (await getSavedSelection()) ?? (await getDailySelection()) ?? (await getEveningSelection());
+    if (existing && existing.applicationsCount > 0) {
+      setAppsCount(existing.applicationsCount);
+      return existing.applicationsCount;
+    }
+
+    // If none, open picker to create one
+    const selection = await openFamilyActivityPicker();
+    const count = selection?.applicationsCount ?? 0;
+    setAppsCount(count);
+    return count;
+  }, []);
 
   const refresh = React.useCallback(async () => {
     if (Platform.OS !== 'ios') return;
     try {
       const settings = await getScheduleSettings();
+      let emergencyActive = false;
+      try {
+        const state = await getBlockState();
+        emergencyActive = Boolean((state as any)?.emergencyActive);
+      } catch {}
       setDailyEnabledState(settings.dailyEnabled);
       setDailyResetTimeState(settings.dailyResetTime ?? '08:00');
-      setNightModeEnabledState(settings.eveningEnabled);
+      setNightModeEnabledState(emergencyActive);
       setNightStart(settings.eveningStart ?? '22:00');
       setNightEnd(settings.eveningEnd ?? '07:00');
 
-      const sel = (await getSavedSelection()) ?? (await getDailySelection()) ?? (await getEveningSelection());
+      const sel =
+        (await getSavedSelection()) ?? (await getDailySelection()) ?? (await getEveningSelection());
       setAppsCount(sel?.applicationsCount ?? 0);
     } catch (error) {
       console.log('[BlockingSettings] refresh failed', error);
@@ -52,6 +74,13 @@ export default function BlockingSettingsScreen() {
     void refresh();
   }, [refresh]);
 
+  useFocusEffect(
+    React.useCallback(() => {
+      void refresh();
+      return () => {};
+    }, [refresh]),
+  );
+
   const ensureFamilyControlsAuthorized = async () => {
     const status = await getAuthorizationStatus();
     if (status === 'approved') return;
@@ -59,6 +88,10 @@ export default function BlockingSettingsScreen() {
     if (requestStatus !== 'approved') {
       throw new Error('Autorisation Screen Time refusée.');
     }
+  };
+
+  const openWebBlockingGuide = () => {
+    router.push('/web-blocking-guide');
   };
 
   const handleToggleDaily = async (value: boolean) => {
@@ -87,19 +120,41 @@ export default function BlockingSettingsScreen() {
     setLoading(true);
     try {
       await ensureFamilyControlsAuthorized();
-      setNightModeEnabledState(value);
-      await setEveningEnabled(value);
-      // If the user previously tapped "Continuer quand même", the evening override can keep the shield
-      // disabled for a while. Turning the mode ON should always re-enable friction immediately.
-      await clearEveningOverride();
+      if (value) {
+        // Always reset any previous emergency window so a new 10-min block starts fresh.
+        try {
+          if (clearEmergencyBlock) {
+            await clearEmergencyBlock();
+          }
+        } catch {}
+
+        const count = await ensureSelectionExists();
+        if (count <= 0) {
+          throw new Error("Sélectionne au moins une app à bloquer.");
+        }
+        const ok = await startEmergencyBlock();
+        if (!ok) {
+          throw new Error("Impossible de lancer le blocage d'urgence.");
+        }
+        setNightModeEnabledState(true);
+      } else {
+        if (clearEmergencyBlock) {
+          await clearEmergencyBlock();
+        }
+        setNightModeEnabledState(false);
+      }
       await applyCurrentShieldsNow();
     } catch (error: any) {
       console.log('[BlockingSettings] toggle night failed', error);
-      Alert.alert('Mode Nuit', error?.message ?? 'Impossible de mettre à jour le réglage.');
+      Alert.alert('Mode Urgence', error?.message ?? 'Impossible de mettre à jour le réglage.');
       await refresh();
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleToggleWebFilter = () => {
+    openWebBlockingGuide();
   };
 
   const handleManageApps = async () => {
@@ -188,10 +243,8 @@ export default function BlockingSettingsScreen() {
 
           <View style={styles.row}>
             <TouchableOpacity style={styles.rowText} onPress={() => router.push('/night-mode-settings')} activeOpacity={0.85}>
-              <Text style={styles.rowLabel}>Mode Nuit</Text>
-              <Text style={styles.rowDesc}>
-                Réduit l&apos;accès à tes apps sensibles le soir ({nightStart}–{nightEnd}).
-              </Text>
+              <Text style={styles.rowLabel}>Mode Urgence</Text>
+              <Text style={styles.rowDesc}>Bloque tes apps sensibles pendant 10 minutes.</Text>
             </TouchableOpacity>
             <Switch value={nightModeEnabled} onValueChange={handleToggleNightMode} disabled={loading} />
           </View>
@@ -199,11 +252,11 @@ export default function BlockingSettingsScreen() {
           <View style={styles.divider} />
 
           <View style={styles.row}>
-            <View style={styles.rowText}>
+            <TouchableOpacity style={styles.rowText} onPress={openWebBlockingGuide} activeOpacity={0.85}>
               <Text style={styles.rowLabel}>Bloquer le contenu adulte sur le web</Text>
-              <Text style={styles.rowDesc}>Filtre les sites sensibles dans Safari (bientôt disponible).</Text>
-            </View>
-            <Switch value={webFilterEnabled} onValueChange={setWebFilterEnabled} />
+              <Text style={styles.rowDesc}>Bloque les sites adultes sur le web (Safari, Chrome…).</Text>
+            </TouchableOpacity>
+            <Switch value={false} onValueChange={handleToggleWebFilter} disabled={loading} />
           </View>
 
           <TouchableOpacity style={styles.manageAppsButton} onPress={handleManageApps} activeOpacity={0.85} disabled={loading}>
@@ -211,6 +264,7 @@ export default function BlockingSettingsScreen() {
               Gérer les apps bloquées{appsCount ? ` (${appsCount})` : ''}
             </Text>
           </TouchableOpacity>
+
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -318,3 +372,4 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
 });
+

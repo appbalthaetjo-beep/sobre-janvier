@@ -7,6 +7,7 @@ import { useHaptics } from '@/hooks/useHaptics';
 import { useTypewriterMessages } from '@/hooks/useTypewriterMessages';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { SobrietyCardPreview } from './sobriety-card';
+import TapToContinueButton from '@/components/onboarding/TapToContinueButton';
 
 const LETTER_DELAY_MS = 45;
 const MESSAGE_DELAY_MS = 1300;
@@ -45,7 +46,7 @@ export default function PlanStoryScreen() {
     [firstName]
   );
 
-  const { displayedText, finished, currentIndex } = useTypewriterMessages({
+  const { displayedText, finished, currentIndex, tapToContinue } = useTypewriterMessages({
     messages,
     letterDelay: LETTER_DELAY_MS,
     messageDelay: MESSAGE_DELAY_MS,
@@ -79,6 +80,11 @@ export default function PlanStoryScreen() {
 
   const isCardPhase = currentIndex >= 2;
 
+  const handleTapToContinue = () => {
+    triggerTap('light');
+    tapToContinue();
+  };
+
   const handleContinue = () => {
     triggerTap('medium');
     router.push('/onboarding/personalized-summary');
@@ -103,6 +109,8 @@ export default function PlanStoryScreen() {
           <SobrietyCardPreview />
         </Animated.View>
       )}
+
+      {!finished && <TapToContinueButton onPress={handleTapToContinue} />}
 
       {finished && (
         <View style={styles.bottomContainer}>

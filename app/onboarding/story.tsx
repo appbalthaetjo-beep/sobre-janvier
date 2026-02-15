@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useHaptics } from '@/hooks/useHaptics';
 import { useTypewriterMessages } from '@/hooks/useTypewriterMessages';
+import TapToContinueButton from '@/components/onboarding/TapToContinueButton';
 
 const MESSAGES = [
   'La plupart des personnes qui essaient d’arrêter le porno 🌽 n’échouent pas parce qu’elles sont faibles.',
@@ -18,12 +19,17 @@ const MESSAGE_DELAY_MS = 1300;
 export default function OnboardingStoryScreen() {
   const { triggerTap } = useHaptics();
 
-  const { displayedText, finished } = useTypewriterMessages({
+  const { displayedText, finished, tapToContinue } = useTypewriterMessages({
     messages: MESSAGES,
     letterDelay: LETTER_DELAY_MS,
     messageDelay: MESSAGE_DELAY_MS,
     onType: () => triggerTap(),
   });
+
+  const handleTapToContinue = () => {
+    triggerTap('light');
+    tapToContinue();
+  };
 
   const handleContinue = () => {
     triggerTap('medium');
@@ -43,6 +49,8 @@ export default function OnboardingStoryScreen() {
       <View style={styles.content}>
         <Text style={styles.messageText}>{displayedText}</Text>
       </View>
+
+      {!finished && <TapToContinueButton onPress={handleTapToContinue} />}
 
       {finished && (
         <View style={styles.bottomContainer}>

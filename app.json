@@ -114,7 +114,12 @@
     },
     "plugins": [
       "./plugins/withPodfileResourceSigning",
-      "expo-family-controls",
+      [
+        "expo-family-controls",
+        {
+          "appGroupIdentifier": "group.com.balthazar.sobre"
+        }
+      ],
       "./plugins/withScreenTimeBundleIds",
       "./plugins/withHomeScreenQuickActions",
       "expo-notifications",

@@ -4,6 +4,7 @@ import FamilyControls
 import ManagedSettings
 import SwiftUI
 import UIKit
+import UserNotifications
 
 public final class ExpoFamilyControlsModule: Module {
   private let appGroupSuiteName = "group.com.balthazar.sobre"
@@ -18,6 +19,8 @@ public final class ExpoFamilyControlsModule: Module {
   private let eveningEndKey = "eveningEnd"
   private let eveningOverrideUntilKey = "eveningOverrideUntil"
   private let eveningOverrideWindowSecondsKey = "eveningOverrideWindowSeconds"
+  private let emergencyUntilKey = "emergencyUntil"
+  private let emergencyNotificationId = "sobre-emergency-unlock"
   private let dailyDeviceActivityName = DeviceActivityName("sobreDaily")
   private let eveningDeviceActivityName = DeviceActivityName("sobreEvening")
   private let store = ManagedSettingsStore()
@@ -137,7 +140,6 @@ public final class ExpoFamilyControlsModule: Module {
       store.shield.applications = selection.applicationTokens
       // TODO: Map categories to shield.applicationCategories when needed.
       store.shield.applicationCategories = nil
-      store.shield.webDomains = selection.webDomainTokens
 
       return [
         "appsCount": selection.applicationTokens.count,
@@ -153,7 +155,6 @@ public final class ExpoFamilyControlsModule: Module {
 
       store.shield.applications = nil
       store.shield.applicationCategories = nil
-      store.shield.webDomains = nil
       return true
     }
 
@@ -270,6 +271,20 @@ public final class ExpoFamilyControlsModule: Module {
       ensureScheduleDefaults(defaults)
 
       let now = Date()
+      let emergencyUntil = defaults.double(forKey: emergencyUntilKey)
+      if emergencyUntil > now.timeIntervalSince1970 {
+        if let selection = loadSelection(key: legacySelectionKey) ?? loadSelection(key: eveningSelectionKey) ?? loadSelection(key: dailySelectionKey) {
+          store.shield.applications = selection.applicationTokens
+          store.shield.applicationCategories = nil
+          return true
+        }
+        store.shield.applications = nil
+        store.shield.applicationCategories = nil
+        return true
+      } else if emergencyUntil > 0 {
+        defaults.set(0, forKey: emergencyUntilKey)
+      }
+
       let dailyEnabled = defaults.bool(forKey: dailyEnabledKey)
       let isEvening = isWithinEveningWindow(now: now, defaults: defaults)
       let eveningEnabled = defaults.bool(forKey: eveningEnabledKey)
@@ -279,18 +294,15 @@ public final class ExpoFamilyControlsModule: Module {
         if overrideUntil > now.timeIntervalSince1970 {
           store.shield.applications = nil
           store.shield.applicationCategories = nil
-          store.shield.webDomains = nil
           return true
         }
         if let selection = loadSelection(key: legacySelectionKey) ?? loadSelection(key: eveningSelectionKey) {
           store.shield.applications = selection.applicationTokens
           store.shield.applicationCategories = nil
-          store.shield.webDomains = selection.webDomainTokens
           return true
         }
         store.shield.applications = nil
         store.shield.applicationCategories = nil
-        store.shield.webDomains = nil
         return true
       }
 
@@ -299,21 +311,18 @@ public final class ExpoFamilyControlsModule: Module {
         if unlockedUntil > now.timeIntervalSince1970 {
           store.shield.applications = nil
           store.shield.applicationCategories = nil
-          store.shield.webDomains = nil
           return true
         }
         if let selection = loadSelection(key: legacySelectionKey) ?? loadSelection(key: dailySelectionKey) {
           store.shield.applications = selection.applicationTokens
           // TODO: Map categories to shield.applicationCategories when needed.
           store.shield.applicationCategories = nil
-          store.shield.webDomains = selection.webDomainTokens
           return true
         }
       }
 
       store.shield.applications = nil
       store.shield.applicationCategories = nil
-      store.shield.webDomains = nil
       return true
     }
 
@@ -335,6 +344,7 @@ public final class ExpoFamilyControlsModule: Module {
       let dailyUnlockedUntil = defaults.double(forKey: dailyUnlockedUntilKey)
       let now = Date().timeIntervalSince1970
       let isEvening = isWithinEveningWindow(now: Date(), defaults: defaults)
+      let emergencyUntil = defaults.double(forKey: emergencyUntilKey)
       let isOverrideActive = overrideUntil > now
       let hasSelection =
         loadSelectionData(key: legacySelectionKey) != nil ||
@@ -352,8 +362,64 @@ public final class ExpoFamilyControlsModule: Module {
         "eveningOverrideWindowSeconds": overrideWindow,
         "isEveningWindow": isEvening,
         "isOverrideActive": isOverrideActive,
-        "hasSelection": hasSelection
+        "hasSelection": hasSelection,
+        "emergencyActive": emergencyUntil > now,
+        "emergencyUntil": emergencyUntil
       ]
+    }
+
+    AsyncFunction("getShieldLogs") { () throws -> [String] in
+      guard let defaults = UserDefaults(suiteName: appGroupSuiteName) else {
+        return []
+      }
+      return defaults.stringArray(forKey: "ShieldActionLogs") ?? []
+    }
+
+    AsyncFunction("startEmergencyBlock") { () throws -> Bool in
+      guard #available(iOS 16.0, *) else {
+        return false
+      }
+
+      guard let selection = loadSelection(key: legacySelectionKey) ??
+        loadSelection(key: eveningSelectionKey) ??
+        loadSelection(key: dailySelectionKey) else {
+        return false
+      }
+
+      let tokens = selection.applicationTokens
+      if tokens.isEmpty {
+        return false
+      }
+
+      let defaults = try appGroupDefaults()
+      ensureScheduleDefaults(defaults)
+
+      // Apply shield immediately
+      store.shield.applications = tokens
+      store.shield.applicationCategories = nil
+
+      let until = Date().addingTimeInterval(10 * 60).timeIntervalSince1970
+      defaults.set(until, forKey: emergencyUntilKey)
+
+      DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(10 * 60)) { [weak self] in
+        self?.clearEmergencyIfExpired()
+      }
+
+      scheduleEmergencyNotification(inSeconds: 10 * 60)
+
+      return true
+    }
+
+    AsyncFunction("clearEmergencyBlock") { () throws -> Bool in
+      guard #available(iOS 16.0, *) else {
+        return false
+      }
+      let defaults = try appGroupDefaults()
+      defaults.set(0, forKey: emergencyUntilKey)
+      store.shield.applications = nil
+      store.shield.applicationCategories = nil
+      cancelEmergencyNotification()
+      return true
     }
   }
 
@@ -443,6 +509,9 @@ public final class ExpoFamilyControlsModule: Module {
     }
     if defaults.object(forKey: eveningOverrideWindowSecondsKey) == nil {
       defaults.set(15, forKey: eveningOverrideWindowSecondsKey)
+    }
+    if defaults.object(forKey: emergencyUntilKey) == nil {
+      defaults.set(0, forKey: emergencyUntilKey)
     }
   }
 
@@ -540,6 +609,18 @@ public final class ExpoFamilyControlsModule: Module {
     return nowMinutes >= startMinutes || nowMinutes < endMinutes
   }
 
+  private func clearEmergencyIfExpired() {
+    guard let defaults = try? appGroupDefaults() else { return }
+    let until = defaults.double(forKey: emergencyUntilKey)
+    let now = Date().timeIntervalSince1970
+    guard until > 0, now >= until else { return }
+
+    defaults.set(0, forKey: emergencyUntilKey)
+    store.shield.applications = nil
+    store.shield.applicationCategories = nil
+    cancelEmergencyNotification()
+  }
+
   private func minutesFromTime(_ value: String) -> Int? {
     let parts = value.split(separator: ":")
     guard parts.count == 2,
@@ -549,6 +630,23 @@ public final class ExpoFamilyControlsModule: Module {
       return nil
     }
     return hours * 60 + minutes
+  }
+
+  private func scheduleEmergencyNotification(inSeconds seconds: Int) {
+    guard seconds > 0 else { return }
+    let center = UNUserNotificationCenter.current()
+    let content = UNMutableNotificationContent()
+    content.title = "Felicitations ! Blocage d'urgence terminé"
+    content.body = "Tes apps sensibles sont deblocquees. Reviens avec intention."
+    content.sound = .default
+    center.removePendingNotificationRequests(withIdentifiers: [emergencyNotificationId])
+    let trigger = UNTimeIntervalNotificationTrigger(timeInterval: TimeInterval(seconds), repeats: false)
+    let request = UNNotificationRequest(identifier: emergencyNotificationId, content: content, trigger: trigger)
+    center.add(request, withCompletionHandler: nil)
+  }
+
+  private func cancelEmergencyNotification() {
+    UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [emergencyNotificationId])
   }
 
   private func topViewController(base: UIViewController? = nil) -> UIViewController? {

@@ -27,6 +27,8 @@ export type BlockState = {
   isEveningWindow: boolean;
   isOverrideActive: boolean;
   hasSelection: boolean;
+  emergencyActive?: boolean;
+  emergencyUntil?: number;
 };
 
 type ExpoFamilyControlsModule = {
@@ -59,6 +61,8 @@ type ExpoFamilyControlsModule = {
   clearShield(): Promise<boolean>;
   clearEveningOverride(): Promise<boolean>;
   getBlockState(): Promise<BlockState>;
+  startEmergencyBlock(): Promise<boolean>;
+  clearEmergencyBlock(): Promise<boolean>;
 };
 
 const ExpoFamilyControls = requireNativeModule<ExpoFamilyControlsModule>('ExpoFamilyControls');
@@ -156,6 +160,14 @@ export async function clearEveningOverride(): Promise<boolean> {
 
 export async function getBlockState(): Promise<BlockState> {
   return ExpoFamilyControls.getBlockState();
+}
+
+export async function startEmergencyBlock(): Promise<boolean> {
+  return ExpoFamilyControls.startEmergencyBlock();
+}
+
+export async function clearEmergencyBlock(): Promise<boolean> {
+  return ExpoFamilyControls.clearEmergencyBlock();
 }
 
 export type { AuthorizationStatus };

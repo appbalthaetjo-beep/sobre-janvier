@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { ArrowLeft, MessageSquare, Phone, Users, Headphones, Gamepad2 } from 'lucide-react-native';
+import { ArrowLeft, MessageSquare, Phone, Users, Gamepad2 } from 'lucide-react-native';
 import ClarioChat from '@/components/ClarioChat';
 
 export default function StaySoberScreen() {
@@ -77,17 +77,17 @@ export default function StaySoberScreen() {
             </View>
           </TouchableOpacity>
 
-          {/* SOS Amitié */}
-          <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={() => callEmergency('09-72-39-40-50')}
+          {/* Blocage d'urgence 10 minutes */}
+          <TouchableOpacity
+            style={[styles.actionButton, styles.emergencyButton]}
+            onPress={() => router.push('/night-mode-settings')}
           >
             <View style={styles.actionIcon}>
-              <Headphones size={24} color="#10B981" />
+              <Text style={styles.emergencyEmoji}>🔒</Text>
             </View>
             <View style={styles.actionContent}>
-              <Text style={styles.actionTitle}>Appeler SOS Amitié</Text>
-              <Text style={styles.actionSubtitle}>09-72-39-40-50 • Écoute et soutien</Text>
+              <Text style={styles.actionTitle}>Blocage d'urgence 10 min</Text>
+              <Text style={styles.actionSubtitle}>Coupe tes apps sensibles et respire.</Text>
             </View>
           </TouchableOpacity>
 
@@ -344,5 +344,15 @@ const styles = StyleSheet.create({
     color: '#F5F5F5',
     textAlign: 'center',
     lineHeight: 24,
+  },
+  emergencyButton: {
+    borderColor: '#FBBF24',
+    backgroundColor: '#2A1A0A',
+    shadowColor: '#FBBF24',
+    shadowOpacity: 0.3,
+  },
+  emergencyEmoji: {
+    fontSize: 22,
+    color: '#FBBF24',
   },
 });

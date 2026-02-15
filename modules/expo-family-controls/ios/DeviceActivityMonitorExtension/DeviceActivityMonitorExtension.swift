@@ -56,7 +56,6 @@ final class DeviceActivityMonitorExtension: DeviceActivityMonitor {
       store.shield.applications = selection.applicationTokens
       // TODO: Map categories to shield.applicationCategories when needed.
       store.shield.applicationCategories = nil
-      store.shield.webDomains = selection.webDomainTokens
       return
     }
 
@@ -73,7 +72,6 @@ final class DeviceActivityMonitorExtension: DeviceActivityMonitor {
       store.shield.applications = selection.applicationTokens
       // TODO: Map categories to shield.applicationCategories when needed.
       store.shield.applicationCategories = nil
-      store.shield.webDomains = selection.webDomainTokens
       return
     }
 
@@ -83,7 +81,6 @@ final class DeviceActivityMonitorExtension: DeviceActivityMonitor {
   private func clearShield() {
     store.shield.applications = nil
     store.shield.applicationCategories = nil
-    store.shield.webDomains = nil
   }
 
   private func appGroupDefaults() -> UserDefaults {

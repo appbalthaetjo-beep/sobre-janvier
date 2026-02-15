@@ -156,7 +156,7 @@ export default function HomeScreen() {
   const refreshBlockingState = useCallback(async () => {
     try {
       if (Platform.OS !== 'ios') return;
-      const state = await getBlockState();
+      const [state] = await Promise.all([getBlockState()]);
       setBlockingState(state);
     } catch (error) {
       console.log('[Home] getBlockState failed', error);
@@ -768,6 +768,13 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     color: '#000000',
     marginLeft: 8,
+  },
+  blockingWebStatsText: {
+    marginTop: 10,
+    textAlign: 'center',
+    fontSize: 12,
+    color: '#8A8A8A',
+    fontFamily: 'Inter-Regular',
   },
   shieldActions: {
     marginTop: 12,
