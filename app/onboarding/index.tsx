@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useHaptics } from '@/hooks/useHaptics';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export default function OnboardingIntro() {
   const { triggerTap } = useHaptics();
@@ -35,21 +36,31 @@ export default function OnboardingIntro() {
 
         {/* Bouton */}
         <View style={styles.buttonSection}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.startButton}
             onPress={handleStartQuiz}
             activeOpacity={0.9}
           >
-            <Text style={styles.startButtonText}>Commencer le quiz</Text>
+            <LinearGradient
+              colors={['#FFEFA3', '#FFD44D', '#FFBF00']}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={styles.startButtonGradient}
+            >
+              <Text style={styles.startButtonText}>Commencer le quizz</Text>
+            </LinearGradient>
           </TouchableOpacity>
         </View>
 
-        <View style={styles.loginLinkContainer}>
-          <Text style={styles.loginLinkText}>Deja un compte ?</Text>
-          <TouchableOpacity onPress={() => router.push('/auth/login')}>
-            <Text style={styles.loginLinkAction}>Se connecter</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          style={styles.loginPill}
+          onPress={() => router.push('/auth/login')}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.loginPillText}>
+            Déjà un compte ? <Text style={styles.loginPillAction}>Se connecter</Text>
+          </Text>
+        </TouchableOpacity>
 
       </View>
     </SafeAreaView>
@@ -96,36 +107,44 @@ const styles = StyleSheet.create({
   buttonSection: {
     alignItems: 'center',
   },
-  loginLinkContainer: {
-    marginTop: 24,
-    alignItems: 'center',
-    gap: 6,
-  },
-  loginLinkText: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#A3A3A3',
-  },
-  loginLinkAction: {
-    fontSize: 14,
-    fontFamily: 'Inter-SemiBold',
-    color: '#FFD700',
-  },
   startButton: {
-    backgroundColor: '#FFD700', // Jaune
     borderRadius: 16,
-    paddingVertical: 18,
-    paddingHorizontal: 48,
+    overflow: 'hidden',
     shadowColor: '#FFD700',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 6,
   },
+  startButtonGradient: {
+    paddingVertical: 18,
+    paddingHorizontal: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   startButtonText: {
     fontSize: 18,
     fontFamily: 'Inter-SemiBold',
-    color: '#000000', // Texte noir sur bouton jaune
+    color: '#6B4A00',
     textAlign: 'center',
+  },
+  loginPill: {
+    marginTop: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  loginPillText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+    color: 'rgba(255,255,255,0.86)',
+    textAlign: 'center',
+  },
+  loginPillAction: {
+    fontFamily: 'Inter-Bold',
+    color: 'rgba(255,255,255,0.92)',
   },
 });

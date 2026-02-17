@@ -2,7 +2,6 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useHaptics } from '@/hooks/useHaptics';
 
 export default function TestimonialsScreen() {
@@ -68,7 +67,7 @@ export default function TestimonialsScreen() {
 
   const handleFinishOnboarding = async () => {
     triggerTap('medium');
-    router.push('/onboarding/rewiring-advantages');
+    router.push('/onboarding/past-attempts');
   };
 
   const renderTestimonial = (testimonial) => (

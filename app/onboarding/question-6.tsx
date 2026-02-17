@@ -19,7 +19,7 @@ export default function Question6Screen() {
       choices={choices}
       onSelect={setSelectedChoice}
       selectedChoice={selectedChoice}
-      nextRoute="/onboarding/question-7"
+      nextRoute="/onboarding/question-8"
     />
   );
 }

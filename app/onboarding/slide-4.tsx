@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Image, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useHaptics } from '@/hooks/useHaptics';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export default function Slide4Screen() {
   const { triggerTap } = useHaptics();
@@ -13,42 +14,49 @@ export default function Slide4Screen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
-        {/* Emoji central */}
-        <View style={styles.emojiContainer}>
-          <Text style={styles.emoji}>🛤️</Text>
+    <LinearGradient
+      colors={['#53E0E8', '#3B7BFF', '#6C4CF6']}
+      start={{ x: 0.9, y: 0.05 }}
+      end={{ x: 0.15, y: 1 }}
+      style={styles.gradient}
+    >
+      <SafeAreaView style={styles.container}>
+        <View style={styles.content}>
+          {/* Image centrale */}
+          <View style={styles.emojiContainer}>
+            <Image
+              source={{ uri: 'https://i.imgur.com/bYpnEIV.png' }}
+              style={styles.heroImage}
+              resizeMode="contain"
+            />
+          </View>
+
+          {/* Titre */}
+          <Text style={styles.title}>Chemin vers le rétablissement</Text>
+
+          {/* Message */}
+          <Text style={styles.message}>
+            Le rétablissement est possible. En t&apos;abstenant de pornographie, ton cerveau peut
+            réinitialiser sa sensibilité à la dopamine, conduisant à des relations plus saines et un
+            bien-être amélioré.
+          </Text>
         </View>
 
-        {/* Titre */}
-        <Text style={styles.title}>
-          Chemin vers le rétablissement
-        </Text>
-
-        {/* Message */}
-        <Text style={styles.message}>
-          Le rétablissement est possible. En s'abstenant de pornographie, votre cerveau peut 
-          réinitialiser sa sensibilité à la dopamine, conduisant à des relations plus saines 
-          et un bien-être amélioré.
-        </Text>
-      </View>
-
-      {/* Bouton suivant */}
-      <TouchableOpacity
-        style={styles.nextButton}
-        onPress={handleNext}
-        activeOpacity={0.9}
-      >
-        <Text style={styles.nextButtonText}>Suivant</Text>
-      </TouchableOpacity>
-    </SafeAreaView>
+        {/* Bouton suivant */}
+        <TouchableOpacity style={styles.nextButton} onPress={handleNext} activeOpacity={0.9}>
+          <Text style={styles.nextButtonText}>Suivant</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
+  gradient: {
+    flex: 1,
+  },
   container: {
     flex: 1,
-    backgroundColor: '#002f5d', // Bleu foncé QUITTR
     paddingHorizontal: 32,
   },
   content: {
@@ -58,10 +66,12 @@ const styles = StyleSheet.create({
   },
   emojiContainer: {
     marginBottom: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  emoji: {
-    fontSize: 80,
-    textAlign: 'center',
+  heroImage: {
+    width: 200,
+    height: 200,
   },
   title: {
     fontSize: 28,

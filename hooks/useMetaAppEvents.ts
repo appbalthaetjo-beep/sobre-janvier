@@ -7,6 +7,7 @@ export function useMetaAppEvents() {
     let teardown: (() => void) | undefined;
 
     const start = async () => {
+      // Do not show the ATT prompt on app launch; request later during onboarding.
       const cleanup = await setupMetaAppEvents();
 
       if (!isMounted) {

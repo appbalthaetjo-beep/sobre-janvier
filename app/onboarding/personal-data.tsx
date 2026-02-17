@@ -1,124 +1,89 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, KeyboardAvoidingView, Platform } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
-import { User, Calendar } from 'lucide-react-native';
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import ProgressBar from '@/components/onboarding/ProgressBar';
+import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFirestore } from '@/hooks/useFirestore';
 
 export default function PersonalDataScreen() {
   const { saveUserData } = useFirestore();
   const [firstName, setFirstName] = useState('');
-  const [age, setAge] = useState('');
 
-  const handleFinishQuiz = async () => {
+  const canProceed = firstName.trim().length > 0;
+
+  const handleContinue = async () => {
     if (!firstName.trim()) {
-      Alert.alert('Erreur', 'Veuillez entrer votre prénom');
+      Alert.alert('Erreur', 'Veuillez entrer votre prénom.');
       return;
     }
 
-    if (!age || parseInt(age) < 13 || parseInt(age) > 120) {
-      Alert.alert('Erreur', 'Veuillez entrer un âge valide (13-120 ans)');
-      return;
-    }
+    const personalData = { firstName: firstName.trim() };
 
-    // Sauvegarder les données personnelles
-    const personalData = {
-      firstName: firstName.trim(),
-      age: parseInt(age)
-    };
-    
-    // Sauvegarder localement
     await AsyncStorage.setItem('personalData', JSON.stringify(personalData));
-    
-    // Sauvegarder dans Firebase
+
     try {
-      await saveUserData({ 
-        personalData: personalData,
+      await saveUserData({
+        personalData,
         profile: {
-          name: firstName.trim(),
-          age: parseInt(age)
-        }
+          name: personalData.firstName,
+        },
       });
       console.log('✅ Personal data saved to Firebase');
     } catch (error) {
       console.error('❌ Error saving personal data to Firebase:', error);
     }
-    
-    // Passer à la page de chargement
-    router.push('/onboarding/loading');
-  };
 
-  const canProceed = firstName.trim().length > 0 && age && parseInt(age) >= 13 && parseInt(age) <= 120;
+    router.push('/onboarding/consider-this');
+  };
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         style={styles.keyboardContainer}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <ProgressBar currentStep={10} totalSteps={10} />
-        
         <View style={styles.content}>
-          <View style={styles.questionSection}>
-            <Text style={styles.questionText}>Un peu plus à propos de vous</Text>
-          </View>
+          <Text style={styles.kicker}>Ton nom est important.</Text>
+          <Text style={styles.title}>Comment dois-je t&apos;appeler ?</Text>
 
-          <View style={styles.inputsSection}>
-            <View style={styles.inputContainer}>
-              <User size={20} color="#A3A3A3" />
-              <TextInput
-                style={styles.input}
-                placeholder="Votre prénom"
-                placeholderTextColor="#666666"
-                value={firstName}
-                onChangeText={setFirstName}
-                autoCapitalize="words"
-                returnKeyType="next"
-                maxLength={30}
-              />
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Calendar size={20} color="#A3A3A3" />
-              <TextInput
-                style={styles.input}
-                placeholder="Votre âge"
-                placeholderTextColor="#666666"
-                value={age}
-                onChangeText={setAge}
-                keyboardType="numeric"
-                returnKeyType="done"
-                maxLength={3}
-                onSubmitEditing={handleFinishQuiz}
-              />
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.bottomContainer}>
-          <TouchableOpacity
-            style={styles.skipButton}
-            onPress={() => router.push('/onboarding/loading')}
-          >
-            <Text style={styles.skipButtonText}>Passer</Text>
-          </TouchableOpacity>
+          <TextInput
+            style={styles.input}
+            placeholder="Ton prénom"
+            placeholderTextColor="#9CA3AF"
+            value={firstName}
+            onChangeText={setFirstName}
+            autoCapitalize="words"
+            returnKeyType="done"
+            maxLength={30}
+            onSubmitEditing={handleContinue}
+          />
 
           <TouchableOpacity
-            style={[
-              styles.finishButton,
-              !canProceed && styles.finishButtonDisabled
-            ]}
-            onPress={handleFinishQuiz}
+            style={[styles.continueButton, !canProceed && styles.continueButtonDisabled]}
+            onPress={handleContinue}
             disabled={!canProceed}
+            activeOpacity={0.9}
           >
-            <Text style={[
-              styles.finishButtonText,
-              !canProceed && styles.finishButtonTextDisabled
-            ]}>
-              Terminer le quiz
-            </Text>
+            <LinearGradient
+              colors={['#FFEFA3', '#FFD44D', '#FFBF00']}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={styles.continueGradient}
+            >
+              <Text style={[styles.continueButtonText, !canProceed && styles.continueButtonTextDisabled]}>
+                Continuer
+              </Text>
+            </LinearGradient>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -137,78 +102,48 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 24,
+    justifyContent: 'center',
   },
-  questionSection: {
-    paddingVertical: 60,
-    alignItems: 'center',
+  kicker: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+    color: 'rgba(255,255,255,0.7)',
+    marginBottom: 10,
   },
-  questionText: {
+  title: {
     fontSize: 28,
     fontFamily: 'Inter-Bold',
     color: '#FFFFFF',
-    textAlign: 'center',
-    lineHeight: 36,
-  },
-  inputsSection: {
-    gap: 20,
-    paddingTop: 40,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1A1A1A',
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderWidth: 2,
-    borderColor: '#333333',
+    lineHeight: 34,
+    marginBottom: 18,
   },
   input: {
-    flex: 1,
     fontSize: 18,
     fontFamily: 'Inter-Regular',
     color: '#FFFFFF',
-    marginLeft: 12,
-  },
-  bottomContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#333333',
-  },
-  skipButton: {
-    paddingVertical: 12,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 14,
     paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 18,
   },
-  skipButtonText: {
-    fontSize: 16,
-    fontFamily: 'Inter-Medium',
-    color: '#A3A3A3',
-  },
-  finishButton: {
-    backgroundColor: '#FFD700',
+  continueButton: {
     borderRadius: 16,
+    overflow: 'hidden',
+  },
+  continueButtonDisabled: {
+    opacity: 0.35,
+  },
+  continueGradient: {
     paddingVertical: 16,
-    paddingHorizontal: 32,
-    shadowColor: '#FFD700',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    alignItems: 'center',
   },
-  finishButtonDisabled: {
-    backgroundColor: '#333333',
-    shadowOpacity: 0,
-  },
-  finishButtonText: {
+  continueButtonText: {
     fontSize: 16,
     fontFamily: 'Inter-SemiBold',
     color: '#000000',
   },
-  finishButtonTextDisabled: {
-    color: '#666666',
+  continueButtonTextDisabled: {
+    color: '#000000',
   },
 });

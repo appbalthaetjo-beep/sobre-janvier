@@ -1,53 +1,73 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Image, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useHaptics } from '@/hooks/useHaptics';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export default function Slide2Screen() {
   const { triggerTap } = useHaptics();
 
   const handleNext = () => {
     triggerTap('medium');
-    router.push('/onboarding/slide-3');
+    router.push('/onboarding/slide-4');
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
-        {/* Emoji central */}
-        <View style={styles.emojiContainer}>
-          <Text style={styles.emoji}>💔</Text>
+    <LinearGradient
+      colors={['#F24B5D', '#F04C77', '#EF4A5C', '#F03D3D']}
+      start={{ x: 0.15, y: 0 }}
+      end={{ x: 0.85, y: 1 }}
+      style={styles.gradient}
+    >
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <Image
+            source={{ uri: 'https://i.imgur.com/35ceOTL.png' }}
+            style={styles.headerLogo}
+            resizeMode="contain"
+          />
+        </View>
+        <View style={styles.content}>
+          <View style={styles.emojiContainer}>
+            <Image
+              source={{ uri: 'https://i.imgur.com/aU4nBwM.png' }}
+              style={styles.heroImage}
+              resizeMode="contain"
+            />
+          </View>
+
+          <Text style={styles.title}>La pornographie brise le désir</Text>
+
+          <Text style={styles.message}>
+            Plus de 50 % des personnes dépendantes au porno ont signalé une perte d’intérêt pour le vrai sexe.
+          </Text>
         </View>
 
-        {/* Titre */}
-        <Text style={styles.title}>
-          La pornographie brise le désir
-        </Text>
-
-        {/* Message */}
-        <Text style={styles.message}>
-          Plus de 50 % des accros au porno ont signalé une perte d'intérêt pour le vrai sexe.
-        </Text>
-      </View>
-
-      {/* Bouton suivant */}
-      <TouchableOpacity
-        style={styles.nextButton}
-        onPress={handleNext}
-        activeOpacity={0.9}
-      >
-        <Text style={styles.nextButtonText}>Suivant</Text>
-      </TouchableOpacity>
-    </SafeAreaView>
+        <TouchableOpacity style={styles.nextButton} onPress={handleNext} activeOpacity={0.9}>
+          <Text style={styles.nextButtonText}>Suivant</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
+  gradient: {
+    flex: 1,
+  },
   container: {
     flex: 1,
-    backgroundColor: '#002f5d', // Bleu foncé QUITTR
     paddingHorizontal: 32,
+  },
+  header: {
+    alignItems: 'center',
+    paddingTop: 24,
+    paddingBottom: 10,
+  },
+  headerLogo: {
+    width: 74,
+    height: 74,
   },
   content: {
     flex: 1,
@@ -56,10 +76,12 @@ const styles = StyleSheet.create({
   },
   emojiContainer: {
     marginBottom: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  emoji: {
-    fontSize: 80,
-    textAlign: 'center',
+  heroImage: {
+    width: 200,
+    height: 200,
   },
   title: {
     fontSize: 28,
@@ -93,6 +115,6 @@ const styles = StyleSheet.create({
   nextButtonText: {
     fontSize: 18,
     fontFamily: 'Inter-SemiBold',
-    color: '#002f5d',
+    color: '#F03D3D',
   },
 });

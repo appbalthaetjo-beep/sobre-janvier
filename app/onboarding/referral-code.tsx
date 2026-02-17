@@ -75,7 +75,7 @@ export default function ReferralCodeScreen() {
       }
       
       // Continuer vers la page finale
-      router.push('/onboarding/plan-story');
+      router.push('/onboarding/personalized-summary');
     } catch (error) {
       console.error('Error saving referral code:', error);
       console.error('❌ CRITICAL: Referral code NOT saved due to error');
@@ -85,7 +85,7 @@ export default function ReferralCodeScreen() {
   };
 
   const handleSkip = () => {
-    router.push('/onboarding/plan-story');
+    router.push('/onboarding/personalized-summary');
   };
 
   const handleBack = () => {

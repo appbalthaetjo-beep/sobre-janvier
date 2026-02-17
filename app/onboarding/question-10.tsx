@@ -12,13 +12,13 @@ export default function Question10Screen() {
   return (
     <QuestionTemplate
       currentStep={10}
-      totalSteps={10}
+      totalSteps={13}
       question="Avez-vous déjà dépensé de l'argent pour accéder à du contenu explicite ?"
       questionKey="money"
       choices={choices}
       onSelect={setSelectedChoice}
       selectedChoice={selectedChoice}
-      nextRoute="/onboarding/personal-data"
+      nextRoute="/onboarding/question-11"
     />
   );
 }

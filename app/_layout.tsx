@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Stack, usePathname } from 'expo-router';
+import { Stack, usePathname, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { useMetaAppEvents } from '@/hooks/useMetaAppEvents';
@@ -8,9 +8,9 @@ import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_7
 import * as SplashScreen from 'expo-splash-screen';
 import { useAuth } from '@/hooks/useAuth';
 import { useRevenueCat } from '@/hooks/useRevenueCat';
-import { router } from 'expo-router';
 import SplashScreenComponent from '@/components/SplashScreen';
 import { AppState, Linking, Platform, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import GlobalErrorBoundary from '@/components/GlobalErrorBoundary';
 import FeedbackModalHost from '@/components/FeedbackModalHost';
 import { readShouldShowOnboardingFlag, subscribeShouldShowOnboardingFlag } from '@/utils/onboardingFlag';
@@ -26,25 +26,28 @@ import { initPaywallAbandonReminders } from '@/src/lib/revenuecat';
 const ONBOARDING_STEPS: { path: string; screen_name: string }[] = [
   { path: '/onboarding/index', screen_name: 'welcome' },
   { path: '/onboarding/story', screen_name: 'story' },
-  { path: '/onboarding/sobriety-card', screen_name: 'sobriety_card' },
+  { path: '/onboarding/personal-data', screen_name: 'personal_data' },
+  { path: '/onboarding/consider-this', screen_name: 'consider_this' },
   { path: '/onboarding/question-1', screen_name: 'question_1' },
   { path: '/onboarding/question-2', screen_name: 'question_2' },
   { path: '/onboarding/question-3', screen_name: 'question_3' },
+  { path: '/onboarding/youre-in-the-right-place', screen_name: 'youre_in_the_right_place' },
   { path: '/onboarding/question-4', screen_name: 'question_4' },
   { path: '/onboarding/question-5', screen_name: 'question_5' },
   { path: '/onboarding/question-6', screen_name: 'question_6' },
-  { path: '/onboarding/question-7', screen_name: 'question_7' },
   { path: '/onboarding/question-8', screen_name: 'question_8' },
   { path: '/onboarding/question-9', screen_name: 'question_9' },
   { path: '/onboarding/question-10', screen_name: 'question_10' },
-  { path: '/onboarding/personal-data', screen_name: 'personal_data' },
+  { path: '/onboarding/question-11', screen_name: 'question_11' },
+  { path: '/onboarding/question-12', screen_name: 'question_12' },
+  { path: '/onboarding/question-13', screen_name: 'question_13' },
   { path: '/onboarding/loading', screen_name: 'loading' },
   { path: '/onboarding/results', screen_name: 'results' },
   { path: '/onboarding/testimonials', screen_name: 'testimonials' },
   { path: '/onboarding/symptoms', screen_name: 'symptoms' },
+  { path: '/onboarding/slide-3', screen_name: 'slide_3' },
   { path: '/onboarding/slide-1', screen_name: 'slide_1' },
   { path: '/onboarding/slide-2', screen_name: 'slide_2' },
-  { path: '/onboarding/slide-3', screen_name: 'slide_3' },
   { path: '/onboarding/slide-4', screen_name: 'slide_4' },
   { path: '/onboarding/rewiring-advantages', screen_name: 'rewiring_advantages' },
   { path: '/onboarding/commitment-signature', screen_name: 'commitment_signature' },
@@ -56,9 +59,11 @@ const ONBOARDING_STEPS: { path: string; screen_name: string }[] = [
   { path: '/onboarding/slide-10', screen_name: 'slide_10' },
   { path: '/onboarding/slide-11', screen_name: 'slide_11' },
   { path: '/onboarding/personal-goals', screen_name: 'personal_goals' },
+  { path: '/onboarding/rate-us', screen_name: 'rate_us' },
+  { path: '/onboarding/free-trial', screen_name: 'free_trial' },
   { path: '/onboarding/referral-code', screen_name: 'referral_code' },
   { path: '/onboarding/personalized-summary', screen_name: 'personalized_summary' },
-  { path: '/onboarding/plan-story', screen_name: 'plan_story' },
+  { path: '/onboarding/trial-reminder', screen_name: 'trial_reminder' },
 ];
 
 const ONBOARDING_STEP_MAP = ONBOARDING_STEPS.reduce<Record<string, { step: number; screen_name: string }>>(
@@ -417,85 +422,90 @@ function RootLayoutInner() {
   }
 
   return (
-    <GlobalErrorBoundary onReset={() => router.replace('/(tabs)') }>
-      <View style={{ flex: 1 }}>
-        <Stack initialRouteName="(tabs)" screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="auth/login" />
-          <Stack.Screen name="auth/signup" />
-          <Stack.Screen name="onboarding/index" />
-          <Stack.Screen name="onboarding/story" />
-          <Stack.Screen name="onboarding/sobriety-card" />
-          <Stack.Screen name="onboarding/question-1" />
-          <Stack.Screen name="onboarding/question-2" />
-          <Stack.Screen name="onboarding/question-3" />
-          <Stack.Screen name="onboarding/question-4" />
-          <Stack.Screen name="onboarding/question-5" />
-          <Stack.Screen name="onboarding/question-6" />
-          <Stack.Screen name="onboarding/question-7" />
-          <Stack.Screen name="onboarding/question-8" />
-          <Stack.Screen name="onboarding/question-9" />
-          <Stack.Screen name="onboarding/question-10" />
-          <Stack.Screen name="onboarding/personal-data" />
-          <Stack.Screen name="onboarding/loading" />
-          <Stack.Screen name="onboarding/results" />
-          <Stack.Screen name="onboarding/testimonials" />
-          <Stack.Screen name="onboarding/symptoms" />
-          <Stack.Screen name="onboarding/slide-1" />
-          <Stack.Screen name="onboarding/slide-2" />
-          <Stack.Screen name="onboarding/slide-3" />
-          <Stack.Screen name="onboarding/slide-4" />
-          <Stack.Screen name="onboarding/rewiring-advantages" />
-          <Stack.Screen name="onboarding/commitment-signature" />
-          <Stack.Screen name="onboarding/slide-5" />
-          <Stack.Screen name="onboarding/slide-6" />
-          <Stack.Screen name="onboarding/slide-7" />
-          <Stack.Screen name="onboarding/slide-8" />
-          <Stack.Screen name="onboarding/slide-9" />
-          <Stack.Screen name="onboarding/slide-10" />
-          <Stack.Screen name="onboarding/slide-11" />
-          <Stack.Screen name="onboarding/personal-goals" />
-          <Stack.Screen name="onboarding/referral-code" />
-          <Stack.Screen name="onboarding/personalized-summary" />
-          <Stack.Screen name="onboarding/plan-story" />
-          <Stack.Screen name="commitment" />
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen
-            name="emergency"
-            options={{
-              presentation: 'modal',
-              animation: 'slide_from_bottom',
-              gestureEnabled: true,
-              gestureDirection: 'vertical',
-              headerShown: false,
-            }}
-          />
-          <Stack.Screen name="stay-sober" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="pause-mode" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="relapse" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="reasons" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="add-reason" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="reflect-reason" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="journal" />
-          <Stack.Screen name="site-blocking" />
-          <Stack.Screen name="edit-blacklist" />
-          <Stack.Screen name="safe-browser" />
-          <Stack.Screen name="challenges" />
-          <Stack.Screen name="milestone-detail" />
-          <Stack.Screen name="lesson-detail" />
-          <Stack.Screen name="privacy-policy" />
-          <Stack.Screen name="terms-of-service" />
-          <Stack.Screen name="blocking-settings" />
-          <Stack.Screen name="daily-reset-settings" />
-          <Stack.Screen name="night-mode-settings" />
-          <Stack.Screen name="settings" />
-          <Stack.Screen name="profile" />
-          <Stack.Screen name="debug/billing" />
-          <Stack.Screen name="+not-found" />
-        </Stack>
-        <FeedbackModalHost />
-        <StatusBar style="auto" />
-      </View>
-    </GlobalErrorBoundary>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <GlobalErrorBoundary onReset={() => router.replace('/(tabs)') }>
+        <View style={{ flex: 1 }}>
+          <Stack initialRouteName="(tabs)" screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="auth/login" />
+            <Stack.Screen name="auth/signup" />
+            <Stack.Screen name="onboarding/index" />
+            <Stack.Screen name="onboarding/story" />
+            <Stack.Screen name="onboarding/personal-data" />
+            <Stack.Screen name="onboarding/consider-this" />
+            <Stack.Screen name="onboarding/question-1" />
+            <Stack.Screen name="onboarding/question-2" />
+            <Stack.Screen name="onboarding/question-3" />
+            <Stack.Screen name="onboarding/youre-in-the-right-place" />
+            <Stack.Screen name="onboarding/question-4" />
+            <Stack.Screen name="onboarding/question-5" />
+            <Stack.Screen name="onboarding/question-6" />
+            <Stack.Screen name="onboarding/question-8" />
+            <Stack.Screen name="onboarding/question-9" />
+            <Stack.Screen name="onboarding/question-10" />
+            <Stack.Screen name="onboarding/question-11" />
+            <Stack.Screen name="onboarding/question-12" />
+            <Stack.Screen name="onboarding/question-13" />
+            <Stack.Screen name="onboarding/loading" />
+            <Stack.Screen name="onboarding/results" />
+            <Stack.Screen name="onboarding/testimonials" />
+            <Stack.Screen name="onboarding/symptoms" />
+            <Stack.Screen name="onboarding/slide-1" />
+            <Stack.Screen name="onboarding/slide-2" />
+            <Stack.Screen name="onboarding/slide-3" />
+            <Stack.Screen name="onboarding/slide-4" />
+            <Stack.Screen name="onboarding/rewiring-advantages" />
+            <Stack.Screen name="onboarding/commitment-signature" />
+            <Stack.Screen name="onboarding/slide-5" />
+            <Stack.Screen name="onboarding/slide-6" />
+            <Stack.Screen name="onboarding/slide-7" />
+            <Stack.Screen name="onboarding/slide-8" />
+            <Stack.Screen name="onboarding/slide-9" />
+            <Stack.Screen name="onboarding/slide-10" />
+            <Stack.Screen name="onboarding/slide-11" />
+            <Stack.Screen name="onboarding/personal-goals" />
+            <Stack.Screen name="onboarding/referral-code" />
+            <Stack.Screen name="onboarding/personalized-summary" />
+            <Stack.Screen name="onboarding/trial-reminder" />
+            <Stack.Screen name="commitment" />
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen
+              name="emergency"
+              options={{
+                presentation: 'modal',
+                animation: 'slide_from_bottom',
+                gestureEnabled: true,
+                gestureDirection: 'vertical',
+                headerShown: false,
+              }}
+            />
+            <Stack.Screen name="stay-sober" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="pause-mode" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="relapse" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="reasons" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="add-reason" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="reflect-reason" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="journal" />
+            <Stack.Screen name="site-blocking" />
+            <Stack.Screen name="edit-blacklist" />
+            <Stack.Screen name="safe-browser" />
+            <Stack.Screen name="challenges" />
+            <Stack.Screen name="milestone-detail" />
+            <Stack.Screen name="lesson-detail" />
+            <Stack.Screen name="privacy-policy" />
+            <Stack.Screen name="terms-of-service" />
+            <Stack.Screen name="blocking-settings" />
+            <Stack.Screen name="daily-reset-settings" />
+            <Stack.Screen name="night-mode-settings" />
+            <Stack.Screen name="settings" />
+            <Stack.Screen name="profile" />
+            <Stack.Screen name="debug/billing" />
+            <Stack.Screen name="+not-found" />
+          </Stack>
+          <FeedbackModalHost />
+          <StatusBar style="auto" />
+        </View>
+      </GlobalErrorBoundary>
+    </GestureHandlerRootView>
   );
 }
 

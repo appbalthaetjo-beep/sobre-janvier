@@ -290,11 +290,11 @@ export default function ProfileScreen() {
       // Charger depuis AsyncStorage
       const personalData = await AsyncStorage.getItem('personalData');
       if (personalData) {
-        const { firstName, age } = JSON.parse(personalData);
-        setUserProfile(prev => ({
+        const { firstName, age } = JSON.parse(personalData) as { firstName?: string; age?: number };
+        setUserProfile((prev) => ({
           ...prev,
           name: firstName || user?.displayName || '',
-          age: age || 0
+          age: typeof age === 'number' ? age : prev.age,
         }));
       }
 

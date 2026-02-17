@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import Svg, { Path } from 'react-native-svg';
 import { useHaptics } from '@/hooks/useHaptics';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const { width } = Dimensions.get('window');
 const signatureAreaWidth = width - 48;
@@ -84,7 +85,7 @@ export default function CommitmentSignatureScreen() {
 
   const handleContinue = () => {
     triggerTap('medium');
-    router.push('/onboarding/personal-goals');
+    router.push('/onboarding/rate-us');
   };
 
   const handleBack = () => {
@@ -97,9 +98,18 @@ export default function CommitmentSignatureScreen() {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-          <ArrowLeft size={24} color="#FFFFFF" />
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => {
+            triggerTap('light');
+            handleBack();
+          }}
+          activeOpacity={0.7}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <ArrowLeft size={22} color="rgba(255,255,255,0.9)" />
         </TouchableOpacity>
+        <View style={styles.headerSpacer} />
       </View>
 
       {/* Contenu principal scrollable */}
@@ -108,11 +118,10 @@ export default function CommitmentSignatureScreen() {
         contentContainerStyle={styles.scrollContent}
         scrollEnabled={!isDrawing}
       >
-        {/* Title Section */}
-        <View style={styles.titleSection}>
-          <Text style={styles.title}>Signez votre engagement</Text>
-          <Text style={styles.subtitle}>
-            Promettez-vous que vous ne regarderez plus jamais de pornographie.
+        <View style={styles.questionSection}>
+          <Text style={styles.questionText}>Signe ton engagement</Text>
+          <Text style={styles.helperText}>
+            Fais une promesse à toi-même : arrêter la pornographie.
           </Text>
         </View>
 
@@ -182,19 +191,22 @@ export default function CommitmentSignatureScreen() {
       {/* Bottom Button Container - TOUJOURS VISIBLE */}
       <View style={styles.bottomContainer}>
         <TouchableOpacity
-          style={[
-            styles.continueButton,
-            !hasSignature && styles.continueButtonDisabled
-          ]}
+          style={[styles.continueButton, !hasSignature && styles.continueButtonDisabled]}
           onPress={handleContinue}
           disabled={!hasSignature}
+          activeOpacity={0.9}
         >
-          <Text style={[
-            styles.continueButtonText,
-            !hasSignature && styles.continueButtonTextDisabled
-          ]}>
-            Continuer
-          </Text>
+          <LinearGradient
+            colors={['#F7E08A', '#D6A93A', '#B17A10']}
+            locations={[0, 0.55, 1]}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={styles.continueButtonGradient}
+          >
+            <Text style={[styles.continueButtonText, !hasSignature && styles.continueButtonTextDisabled]}>
+              Continuer
+            </Text>
+          </LinearGradient>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -207,12 +219,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#000000',
   },
   header: {
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 18,
+    paddingTop: 10,
+    paddingBottom: 14,
   },
   backButton: {
-    padding: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  headerSpacer: {
+    width: 36,
   },
   scrollView: {
     flex: 1,
@@ -220,26 +242,24 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 20,
   },
-  titleSection: {
+  questionSection: {
     paddingHorizontal: 24,
-    paddingVertical: 32,
-    alignItems: 'center',
+    paddingTop: 24,
+    paddingBottom: 22,
+    alignItems: 'flex-start',
   },
-  title: {
-    fontSize: 32,
+  questionText: {
+    fontSize: 30,
     fontFamily: 'Inter-Bold',
     color: '#FFFFFF',
-    textAlign: 'center',
-    marginBottom: 20,
-    lineHeight: 40,
+    lineHeight: 38,
+    marginBottom: 10,
   },
-  subtitle: {
-    fontSize: 18,
-    fontFamily: 'Inter-Regular',
-    color: '#A3A3A3',
-    textAlign: 'center',
-    lineHeight: 26,
-    paddingHorizontal: 16,
+  helperText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Medium',
+    color: 'rgba(255,255,255,0.55)',
+    lineHeight: 20,
   },
   signatureSection: {
     paddingHorizontal: 24,
@@ -317,31 +337,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 20,
     paddingBottom: 40,
-    borderTopWidth: 1,
-    borderTopColor: '#333333',
   },
   continueButton: {
-    backgroundColor: '#FFD700',
+    borderRadius: 16,
+    overflow: 'hidden',
+    width: '100%',
+  },
+  continueButtonDisabled: {
+    opacity: 0.45,
+  },
+  continueButtonGradient: {
+    width: '100%',
     borderRadius: 16,
     paddingVertical: 18,
     paddingHorizontal: 32,
     alignItems: 'center',
-    shadowColor: '#FFD700',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  continueButtonDisabled: {
-    backgroundColor: '#333333',
-    shadowOpacity: 0,
+    justifyContent: 'center',
   },
   continueButtonText: {
     fontSize: 18,
     fontFamily: 'Inter-Bold',
-    color: '#000000',
+    color: '#6B4A00',
   },
   continueButtonTextDisabled: {
-    color: '#666666',
+    color: '#2B1B00',
   },
 });

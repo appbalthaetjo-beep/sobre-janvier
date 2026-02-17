@@ -2,31 +2,43 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useHaptics } from '@/hooks/useHaptics';
 
 export default function RewiringAdvantagesScreen() {
   const { triggerTap } = useHaptics();
   const handleContinue = () => {
     triggerTap('medium');
-    router.push('/onboarding/commitment-signature');
+    router.push('/onboarding/personal-goals');
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <LinearGradient
+      colors={['#FFEFA3', '#FFD44D', '#FFBF00']}
+      start={{ x: 0, y: 0.5 }}
+      end={{ x: 1, y: 0.5 }}
+      style={styles.gradient}
+    >
+      <SafeAreaView style={styles.safeArea}>
       <View style={styles.content}>
         {/* Titre */}
         <View style={styles.titleContainer}>
-          <Text style={styles.title}>Avantages du recâblage</Text>
+          <Image
+            source={{ uri: 'https://i.imgur.com/35ceOTL.png' }}
+            style={styles.headerLogo}
+            resizeMode="contain"
+          />
         </View>
 
         {/* Image centrale */}
         <View style={styles.imageContainer}>
-          <Image 
-            source={{ uri: 'https://i.imgur.com/u1KwJ4i.png' }}
-            style={styles.chartImage}
-            resizeMode="contain"
-          />
+          <View style={styles.chartFrame}>
+            <Image
+              source={{ uri: 'https://i.imgur.com/J1R2Yrc.png' }}
+              style={styles.chartImage}
+              resizeMode="contain"
+            />
+          </View>
         </View>
 
         {/* Texte explicatif */}
@@ -39,22 +51,28 @@ export default function RewiringAdvantagesScreen() {
 
       {/* Bouton continuer */}
       <View style={styles.bottomContainer}>
-        <TouchableOpacity
-          style={styles.continueButton}
-          onPress={handleContinue}
-          activeOpacity={0.9}
-        >
-          <Text style={styles.continueButtonText}>Continuer</Text>
+        <TouchableOpacity onPress={handleContinue} activeOpacity={0.9} style={styles.ctaWrapper}>
+          <LinearGradient
+            colors={['#FFFBF0', '#FFEFA3', '#FFDF70']}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={styles.cta}
+          >
+            <Text style={styles.ctaText}>Continuer</Text>
+          </LinearGradient>
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  gradient: {
     flex: 1,
-    backgroundColor: '#000000',
+  },
+  safeArea: {
+    flex: 1,
   },
   content: {
     flex: 1,
@@ -62,13 +80,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   titleContainer: {
-    paddingTop: 40,
+    paddingTop: 18,
     alignItems: 'center',
+  },
+  headerLogo: {
+    width: 86,
+    height: 86,
   },
   title: {
     fontSize: 28,
     fontFamily: 'Inter-Bold',
-    color: '#FFFFFF',
+    color: 'rgba(0,0,0,0.88)',
     textAlign: 'center',
     lineHeight: 36,
   },
@@ -78,11 +100,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 20,
   },
-  chartImage: {
+  chartFrame: {
     width: '110%',
     height: 320,
     maxWidth: 420,
-    borderRadius: 20,
+    borderRadius: 22,
+    overflow: 'hidden',
+  },
+  chartImage: {
+    width: '100%',
+    height: '100%',
   },
   textContainer: {
     paddingBottom: 20,
@@ -91,7 +118,7 @@ const styles = StyleSheet.create({
   explanationText: {
     fontSize: 18,
     fontFamily: 'Inter-SemiBold',
-    color: '#FFFFFF',
+    color: 'rgba(0,0,0,0.74)',
     textAlign: 'center',
     lineHeight: 26,
     paddingHorizontal: 20,
@@ -100,21 +127,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 32,
   },
-  continueButton: {
-    backgroundColor: '#FFD700',
-    borderRadius: 16,
-    paddingVertical: 18,
-    paddingHorizontal: 32,
-    alignItems: 'center',
-    shadowColor: '#FFD700',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+  ctaWrapper: {
+    borderRadius: 18,
+    overflow: 'hidden',
   },
-  continueButtonText: {
-    fontSize: 18,
-    fontFamily: 'Inter-SemiBold',
+  cta: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ctaText: {
+    fontSize: 16,
+    fontFamily: 'Inter-Bold',
     color: '#000000',
   },
 });

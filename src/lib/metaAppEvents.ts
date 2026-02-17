@@ -101,12 +101,29 @@ export async function setupMetaAppEvents(): Promise<() => void> {
   }
 
   try {
-    const trackingStatus = await requestTrackingPermissionOnce();
+    const { status } = await getTrackingPermissionsAsync();
+    const trackingStatus = status && status !== 'undetermined' ? status : null;
     await applyAdvertiserTrackingPreference(trackingStatus);
     await logActivateAppOnce(trackingStatus);
     return () => {};
   } catch (error) {
     console.warn('[MetaEvents] setup failed', error);
     return () => {};
+  }
+}
+
+export async function requestMetaTrackingPermission(): Promise<string | null> {
+  if (Platform.OS !== 'ios') {
+    return null;
+  }
+
+  try {
+    const trackingStatus = await requestTrackingPermissionOnce();
+    await applyAdvertiserTrackingPreference(trackingStatus);
+    await logActivateAppOnce(trackingStatus);
+    return trackingStatus;
+  } catch (error) {
+    console.warn('[MetaEvents] ATT request failed', error);
+    return null;
   }
 }

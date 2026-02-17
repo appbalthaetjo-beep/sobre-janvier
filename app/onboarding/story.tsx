@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import { useHaptics } from '@/hooks/useHaptics';
 import { useTypewriterMessages } from '@/hooks/useTypewriterMessages';
 import TapToContinueButton from '@/components/onboarding/TapToContinueButton';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const MESSAGES = [
   'La plupart des personnes qui essaient d’arrêter le porno 🌽 n’échouent pas parce qu’elles sont faibles.',
@@ -33,7 +34,7 @@ export default function OnboardingStoryScreen() {
 
   const handleContinue = () => {
     triggerTap('medium');
-    router.push('/onboarding/sobriety-card');
+    router.push('/onboarding/personal-data');
   };
 
   return (
@@ -55,7 +56,15 @@ export default function OnboardingStoryScreen() {
       {finished && (
         <View style={styles.bottomContainer}>
           <TouchableOpacity style={styles.startButton} onPress={handleContinue} activeOpacity={0.9}>
-            <Text style={styles.startButtonText}>Commencer le quiz</Text>
+            <LinearGradient
+              colors={['#F7E08A', '#D6A93A', '#B17A10']}
+              locations={[0, 0.55, 1]}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={styles.startButtonGradient}
+            >
+              <Text style={styles.startButtonText}>Commencer le quiz</Text>
+            </LinearGradient>
           </TouchableOpacity>
         </View>
       )}
@@ -71,11 +80,11 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    paddingTop: 24,
+    paddingTop: 14,
   },
   logoImage: {
-    width: 140,
-    height: 46,
+    width: 110,
+    height: 36,
   },
   content: {
     flex: 1,
@@ -97,20 +106,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   startButton: {
-    backgroundColor: '#FFD700',
     borderRadius: 16,
-    paddingVertical: 18,
-    paddingHorizontal: 48,
+    overflow: 'hidden',
     shadowColor: '#FFD700',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 6,
+    width: '100%',
+    maxWidth: 420,
+  },
+  startButtonGradient: {
+    borderRadius: 16,
+    paddingVertical: 18,
+    paddingHorizontal: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   startButtonText: {
     fontSize: 18,
     fontFamily: 'Inter-SemiBold',
-    color: '#000000',
+    color: '#6B4A00',
     textAlign: 'center',
   },
 });

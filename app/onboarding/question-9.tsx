@@ -13,7 +13,7 @@ export default function Question9Screen() {
   return (
     <QuestionTemplate
       currentStep={9}
-      totalSteps={10}
+      totalSteps={13}
       question="Regardez-vous de la pornographie par ennui ?"
       questionKey="boredom"
       choices={choices}

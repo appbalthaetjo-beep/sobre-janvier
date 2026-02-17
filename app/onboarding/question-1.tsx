@@ -13,6 +13,7 @@ export default function Question1Screen() {
     <QuestionTemplate
       currentStep={1}
       totalSteps={7}
+      helperText="Cela nous aide à adapter ton accompagnement."
       question="Quel est votre genre ?"
       questionKey="gender"
       choices={choices}

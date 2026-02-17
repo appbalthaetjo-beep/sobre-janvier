@@ -13,7 +13,7 @@ export default function Question8Screen() {
   return (
     <QuestionTemplate
       currentStep={8}
-      totalSteps={10}
+      totalSteps={13}
       question="Vous tournez-vous vers la pornographie quand vous êtes stressé ?"
       questionKey="stress"
       choices={choices}
