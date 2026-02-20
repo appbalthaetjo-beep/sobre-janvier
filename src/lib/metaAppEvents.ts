@@ -1,5 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getTrackingPermissionsAsync, requestTrackingPermissionsAsync } from 'expo-tracking-transparency';
+import {
+  getTrackingPermissionsAsync,
+  requestTrackingPermissionsAsync,
+} from 'expo-tracking-transparency';
 import { Platform } from 'react-native';
 import { AppEventsLogger, Settings } from 'react-native-fbsdk-next';
 
@@ -22,13 +25,23 @@ async function ensureFacebookInitialized(trackingStatus: string | null) {
     Settings.setAppID(FACEBOOK_APP_ID);
     Settings.initializeSDK?.();
 
+    // Auto-log MUST be enabled for SKAdNetwork install postbacks.
+    Settings.setAutoLogAppEventsEnabled?.(true);
+
     if (trackingStatus) {
       const enabled = trackingStatus === 'granted';
       await Settings.setAdvertiserTrackingEnabled(enabled);
       Settings.setAdvertiserIDCollectionEnabled?.(enabled);
+      console.log('[MetaEvents] Advertiser tracking set to', enabled);
+    } else {
+      // Even without explicit ATT status, enable advertiser tracking flag
+      // so Meta SDK can still register SKAdNetwork postbacks (privacy-safe).
+      await Settings.setAdvertiserTrackingEnabled(false);
+      Settings.setAdvertiserIDCollectionEnabled?.(false);
     }
 
     facebookInitialized = true;
+    console.log('[MetaEvents] Facebook SDK initialized');
     return true;
   } catch (error) {
     console.warn('[MetaEvents] Failed to initialize Facebook SDK', error);
@@ -47,7 +60,10 @@ async function applyAdvertiserTrackingPreference(status: string | null) {
     await Settings.setAdvertiserTrackingEnabled(enabled);
     Settings.setAdvertiserIDCollectionEnabled?.(enabled);
   } catch (error) {
-    console.warn('[MetaEvents] Failed to sync advertiser tracking preference', error);
+    console.warn(
+      '[MetaEvents] Failed to sync advertiser tracking preference',
+      error,
+    );
   }
 }
 

@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import { AppEventsLogger, Settings } from 'react-native-fbsdk-next';
 
+const FACEBOOK_APP_ID = '2293641301112058';
 let didInit = false;
 
 export function initMetaSdk() {
@@ -13,12 +14,18 @@ export function initMetaSdk() {
       return;
     }
 
-    Settings.setAutoLogAppEventsEnabled?.(false);
-    Settings.setAdvertiserIDCollectionEnabled?.(false);
-    Settings.setAdvertiserTrackingEnabled?.(false);
+    // Ensure the App ID is set before any other SDK call.
+    Settings.setAppID(FACEBOOK_APP_ID);
+    Settings.initializeSDK?.();
 
-    const appId = Settings.getAppID?.();
-    console.log('[MetaSDK] Settings.getAppID()', appId);
+    // Auto-log must be ON for SKAdNetwork install attribution to work.
+    Settings.setAutoLogAppEventsEnabled?.(true);
+
+    // Advertiser tracking / ID collection will be set properly once ATT
+    // status is known (see metaAppEvents.ts).  We do NOT force them to
+    // `false` here; the SDK defaults to respecting the device ATT setting.
+
+    console.log('[MetaSDK] initialised — appId =', FACEBOOK_APP_ID);
   } catch (e) {
     console.warn('[MetaSDK] init error', e);
   }

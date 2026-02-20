@@ -45,6 +45,12 @@ function ensureNamedGroup(project, mainGroupId, name, groupPath) {
   return group;
 }
 
+function normalizeTargetName(name) {
+  if (!name || typeof name !== 'string') return '';
+  const trimmed = name.trim();
+  return trimmed.startsWith('"') && trimmed.endsWith('"') ? trimmed.slice(1, -1) : trimmed;
+}
+
 function ensureExtensionEntitlements(projectRoot, projectName) {
   const targetDir = path.join(projectRoot, 'ios', projectName);
   EXTENSIONS.forEach((ext) => {
@@ -85,12 +91,9 @@ function addExtensionTargets(config, project) {
   ensureNamedGroup(project, mainGroupId, 'Resources', 'Resources');
 
   EXTENSIONS.forEach((ext) => {
-    const target = findTarget(project, ext.name) || project.addTarget(
-      ext.name,
-      'app_extension',
-      ext.name,
-      `${bundleId}${ext.bundleIdSuffix}`
-    );
+    const target =
+      findTarget(project, ext.name) ||
+      project.addTarget(ext.name, 'app_extension', ext.name, `${bundleId}${ext.bundleIdSuffix}`);
 
     const targetUuid = target.uuid;
     ensureBuildPhases(project, targetUuid);
@@ -107,6 +110,10 @@ function addExtensionTargets(config, project) {
       embedExtensionProduct(project, mainTarget.uuid, targetUuid, ext.name);
     }
   });
+
+  if (mainTarget) {
+    cleanupHostEmbeds(project, mainTarget.uuid, EXTENSIONS);
+  }
 
   return project;
 }
@@ -170,9 +177,11 @@ function embedExtensionProduct(project, hostTargetUuid, extTargetUuid, extName) 
 
 function findTarget(project, name) {
   const targets = project.pbxNativeTargetSection();
+  const desired = normalizeTargetName(name);
   for (const key in targets) {
     const target = targets[key];
-    if (target.name === `"${name}"`) {
+    const targetName = normalizeTargetName(target.name);
+    if (targetName === desired) {
       return { uuid: key, pbxNativeTarget: target };
     }
   }
@@ -356,6 +365,91 @@ function dedupeBuildPhases(project, targetUuid, targetName) {
   if (removed.length > 0) {
     console.log(`SOBRE_EXT_PHASE_DEDUP: removed ${removed.length} duplicate phases for ${targetName}`);
   }
+}
+
+function cleanupHostEmbeds(project, hostTargetUuid, extensions) {
+  const target = project.pbxNativeTargetSection()[hostTargetUuid];
+  if (!target || !target.buildPhases) return;
+
+  const copyPhases = project.hash.project.objects['PBXCopyFilesBuildPhase'] || {};
+  const buildFiles = project.hash.project.objects['PBXBuildFile'] || {};
+  const fileRefs = project.hash.project.objects['PBXFileReference'] || {};
+
+  const extFileRefs = new Set();
+  const extNamesByFileRef = new Map();
+  const extProductRefs = new Map();
+
+  extensions.forEach((ext) => {
+    const existing = findTarget(project, ext.name);
+    if (!existing) return;
+    const productRefId = existing.pbxNativeTarget.productReference;
+    if (!productRefId) return;
+    const product = fileRefs[productRefId];
+    if (!product) return;
+    extFileRefs.add(productRefId);
+    extNamesByFileRef.set(productRefId, ext.name);
+    extProductRefs.set(ext.name, productRefId);
+  });
+
+  if (extFileRefs.size === 0) return;
+
+  const seenInEmbedPhase = new Set();
+
+  target.buildPhases.forEach((phaseRef) => {
+    const phaseId = phaseRef.value;
+    const phase = copyPhases[phaseId];
+    if (!phase) return;
+
+    const isEmbedPhase = phase.name === '"Embed App Extensions"' || phase.dstSubfolderSpec === '13';
+    if (isEmbedPhase) {
+      phase.dstSubfolderSpec = '13';
+      phase.name = '"Embed App Extensions"';
+    }
+
+    const nextFiles = [];
+    (phase.files || []).forEach((entry) => {
+      const bf = buildFiles[entry.value];
+      const ref = bf?.fileRef;
+      const isExt = ref && extFileRefs.has(ref);
+      if (!isExt) {
+        nextFiles.push(entry);
+        return;
+      }
+
+      const extName = extNamesByFileRef.get(ref);
+      if (!isEmbedPhase) {
+        // remove copies to wrong destinations (e.g., PrivateHeaders)
+        delete buildFiles[entry.value];
+        delete buildFiles[`${entry.value}_comment`];
+        return;
+      }
+
+      if (seenInEmbedPhase.has(ref)) {
+        // duplicate within embed phase
+        delete buildFiles[entry.value];
+        delete buildFiles[`${entry.value}_comment`];
+        return;
+      }
+
+      // ensure attributes copy to PlugIns only
+      bf.settings = { ATTRIBUTES: ['RemoveHeadersOnCopy', 'CodeSignOnCopy'] };
+      nextFiles.push(entry);
+      seenInEmbedPhase.add(ref);
+    });
+
+    phase.files = nextFiles;
+  });
+
+  // If an extension product was not present in any embed phase (because we deleted wrong copies),
+  // re-embed it correctly.
+  extensions.forEach((ext) => {
+    const productRefId = extProductRefs.get(ext.name);
+    if (!productRefId || seenInEmbedPhase.has(productRefId)) return;
+    const existing = findTarget(project, ext.name);
+    if (existing) {
+      embedExtensionProduct(project, hostTargetUuid, existing.uuid, ext.name);
+    }
+  });
 }
 
 function updateBuildSettings(project, targetUuid, ext, projectName, bundleId, teamId) {
