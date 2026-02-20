@@ -1,25 +1,45 @@
-import 'react-native-get-random-values';
-import { AppState, InteractionManager, Platform, Linking } from 'react-native';
+import { getExpoPublicEnv } from '@/lib/publicEnv';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
+import * as Notifications from 'expo-notifications';
+import { AppState, InteractionManager, Linking, Platform } from 'react-native';
+import { AppEventsLogger } from 'react-native-fbsdk-next';
+import 'react-native-get-random-values';
 import Purchases, { CustomerInfo } from 'react-native-purchases';
 import PurchasesUI, { PAYWALL_RESULT } from 'react-native-purchases-ui';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Notifications from 'expo-notifications';
 import { promoEvents } from './analytics';
+import {
+  logMetaInitiateCheckout,
+  logMetaPurchase,
+  logMetaStartTrial,
+  logMetaSubscribe,
+} from './metaConversionEvents';
 import { capturePostHogEvent } from './posthog';
-import { getExpoPublicEnv } from '@/lib/publicEnv';
 
 const APP_OWNERSHIP = Constants?.appOwnership ?? 'unknown';
-const FORCE_ENABLE = getExpoPublicEnv('EXPO_PUBLIC_ENABLE_REVENUECAT') === 'true';
-const ENABLE_REVENUECAT = FORCE_ENABLE || (Platform.OS !== 'web' && APP_OWNERSHIP !== 'expo');
-const CAN_USE_NATIVE_PAYWALL = Platform.OS !== 'web' && APP_OWNERSHIP !== 'expo';
-const RC_IOS_API_KEY = getExpoPublicEnv('EXPO_PUBLIC_REVENUECAT_IOS_API_KEY')?.trim();
-const RC_ANDROID_API_KEY = getExpoPublicEnv('EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY')?.trim();
-const RC_WEB_API_KEY = getExpoPublicEnv('EXPO_PUBLIC_REVENUECAT_WEB_API_KEY')?.trim();
-const RC_FALLBACK_API_KEY = getExpoPublicEnv('EXPO_PUBLIC_REVENUECAT_API_KEY')?.trim();
+const FORCE_ENABLE =
+  getExpoPublicEnv('EXPO_PUBLIC_ENABLE_REVENUECAT') === 'true';
+const ENABLE_REVENUECAT =
+  FORCE_ENABLE || (Platform.OS !== 'web' && APP_OWNERSHIP !== 'expo');
+const CAN_USE_NATIVE_PAYWALL =
+  Platform.OS !== 'web' && APP_OWNERSHIP !== 'expo';
+const RC_IOS_API_KEY = getExpoPublicEnv(
+  'EXPO_PUBLIC_REVENUECAT_IOS_API_KEY',
+)?.trim();
+const RC_ANDROID_API_KEY = getExpoPublicEnv(
+  'EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY',
+)?.trim();
+const RC_WEB_API_KEY = getExpoPublicEnv(
+  'EXPO_PUBLIC_REVENUECAT_WEB_API_KEY',
+)?.trim();
+const RC_FALLBACK_API_KEY = getExpoPublicEnv(
+  'EXPO_PUBLIC_REVENUECAT_API_KEY',
+)?.trim();
 
 if (!ENABLE_REVENUECAT) {
-  const reason = FORCE_ENABLE ? 'forced disable' : `appOwnership=${APP_OWNERSHIP}`;
+  const reason = FORCE_ENABLE
+    ? 'forced disable'
+    : `appOwnership=${APP_OWNERSHIP}`;
   console.log(`[RevenueCat] Disabled (${reason})`);
 }
 
@@ -34,12 +54,17 @@ const PAYWALL_ABANDON_LAST_SCHEDULED_AT_KEY = 'paywallAbandonLastScheduledAtMs';
 const PAYWALL_ABANDON_ID_30M_KEY = 'paywallAbandonNotificationId30m';
 const PAYWALL_ABANDON_ID_NEXTDAY_KEY = 'paywallAbandonNotificationIdNextDay10';
 
-const PAYWALL_ABANDON_SHORTCUT_URL_30M = 'sobre://paywall?source=paywall-abandon-30m';
-const PAYWALL_ABANDON_SHORTCUT_URL_NEXTDAY = 'sobre://paywall?source=paywall-abandon-nextday10';
+const PAYWALL_ABANDON_SHORTCUT_URL_30M =
+  'sobre://paywall?source=paywall-abandon-30m';
+const PAYWALL_ABANDON_SHORTCUT_URL_NEXTDAY =
+  'sobre://paywall?source=paywall-abandon-nextday10';
 
-const POST_PURCHASE_BLOCKERS_REMINDER_LAST_SCHEDULED_AT_KEY = 'postPurchaseBlockersReminderLastScheduledAtMs';
-const POST_PURCHASE_BLOCKERS_REMINDER_ID_30M_KEY = 'postPurchaseBlockersReminderNotificationId30m';
-const POST_PURCHASE_BLOCKERS_REMINDER_URL = 'sobre://blocking-settings?source=post-purchase-reminder';
+const POST_PURCHASE_BLOCKERS_REMINDER_LAST_SCHEDULED_AT_KEY =
+  'postPurchaseBlockersReminderLastScheduledAtMs';
+const POST_PURCHASE_BLOCKERS_REMINDER_ID_30M_KEY =
+  'postPurchaseBlockersReminderNotificationId30m';
+const POST_PURCHASE_BLOCKERS_REMINDER_URL =
+  'sobre://blocking-settings?source=post-purchase-reminder';
 
 let paywallOpenedAtMs: number | null = null;
 let paywallCandidateAtMs: number | null = null;
@@ -48,7 +73,9 @@ let paywallAbandonListener: { remove?: () => void } | null = null;
 
 async function cancelPostPurchaseBlockersReminder() {
   try {
-    const id = await AsyncStorage.getItem(POST_PURCHASE_BLOCKERS_REMINDER_ID_30M_KEY);
+    const id = await AsyncStorage.getItem(
+      POST_PURCHASE_BLOCKERS_REMINDER_ID_30M_KEY,
+    );
     if (id) {
       await Notifications.cancelScheduledNotificationAsync(id);
     }
@@ -85,7 +112,11 @@ async function schedulePostPurchaseBlockersReminder() {
   }
 
   const now = Date.now();
-  const lastScheduled = Number((await AsyncStorage.getItem(POST_PURCHASE_BLOCKERS_REMINDER_LAST_SCHEDULED_AT_KEY)) ?? 0);
+  const lastScheduled = Number(
+    (await AsyncStorage.getItem(
+      POST_PURCHASE_BLOCKERS_REMINDER_LAST_SCHEDULED_AT_KEY,
+    )) ?? 0,
+  );
   if (lastScheduled > 0 && now - lastScheduled < 7 * 24 * 60 * 60 * 1000) {
     return;
   }
@@ -96,7 +127,10 @@ async function schedulePostPurchaseBlockersReminder() {
     content: {
       title: 'SOBRE',
       body: '🔒 Pense à configurer tes bloqueurs pour rester protégé au quotidien.',
-      data: { url: POST_PURCHASE_BLOCKERS_REMINDER_URL, type: 'post-purchase-blockers-30m' },
+      data: {
+        url: POST_PURCHASE_BLOCKERS_REMINDER_URL,
+        type: 'post-purchase-blockers-30m',
+      },
     },
     trigger: { seconds: 30 * 60 },
   });
@@ -144,7 +178,9 @@ async function schedulePaywallAbandonReminders() {
 
   const perms = await Notifications.getPermissionsAsync();
   if (perms.status !== 'granted') {
-    console.log('[PaywallAbandon] notifications not granted; skipping schedule');
+    console.log(
+      '[PaywallAbandon] notifications not granted; skipping schedule',
+    );
     return;
   }
 
@@ -161,12 +197,17 @@ async function schedulePaywallAbandonReminders() {
     const pro = Boolean(info.entitlements?.active?.[ENTITLEMENT_ID]);
     if (pro) return;
   } catch (error) {
-    console.log('[PaywallAbandon] failed to confirm pro status; skipping schedule', error);
+    console.log(
+      '[PaywallAbandon] failed to confirm pro status; skipping schedule',
+      error,
+    );
     return;
   }
 
   const now = Date.now();
-  const lastScheduled = Number((await AsyncStorage.getItem(PAYWALL_ABANDON_LAST_SCHEDULED_AT_KEY)) ?? 0);
+  const lastScheduled = Number(
+    (await AsyncStorage.getItem(PAYWALL_ABANDON_LAST_SCHEDULED_AT_KEY)) ?? 0,
+  );
   if (lastScheduled > 0 && now - lastScheduled < 24 * 60 * 60 * 1000) {
     return;
   }
@@ -176,8 +217,11 @@ async function schedulePaywallAbandonReminders() {
   const id30m = await Notifications.scheduleNotificationAsync({
     content: {
       title: 'SOBRE',
-      body: "✨ Essai gratuit disponible — obtiens l’accès complet à l’app SOBRE.",
-      data: { url: PAYWALL_ABANDON_SHORTCUT_URL_30M, type: 'paywall-abandon-30m' },
+      body: '✨ Essai gratuit disponible — obtiens l’accès complet à l’app SOBRE.',
+      data: {
+        url: PAYWALL_ABANDON_SHORTCUT_URL_30M,
+        type: 'paywall-abandon-30m',
+      },
     },
     trigger: { seconds: 30 * 60 },
   });
@@ -186,8 +230,11 @@ async function schedulePaywallAbandonReminders() {
   const idNextDay = await Notifications.scheduleNotificationAsync({
     content: {
       title: 'SOBRE',
-      body: "✨ Tu peux essayer gratuitement — débloque l’accès complet à l’app SOBRE.",
-      data: { url: PAYWALL_ABANDON_SHORTCUT_URL_NEXTDAY, type: 'paywall-abandon-nextday10' },
+      body: '✨ Tu peux essayer gratuitement — débloque l’accès complet à l’app SOBRE.',
+      data: {
+        url: PAYWALL_ABANDON_SHORTCUT_URL_NEXTDAY,
+        type: 'paywall-abandon-nextday10',
+      },
     },
     trigger: { type: 'date', date: tomorrow10 },
   });
@@ -208,7 +255,10 @@ async function schedulePaywallAbandonReminders() {
 async function clearPaywallAbandonState() {
   paywallOpenedAtMs = null;
   paywallCandidateAtMs = null;
-  await AsyncStorage.multiRemove([PAYWALL_ABANDON_OPENED_AT_KEY, PAYWALL_ABANDON_CANDIDATE_AT_KEY]).catch(() => {});
+  await AsyncStorage.multiRemove([
+    PAYWALL_ABANDON_OPENED_AT_KEY,
+    PAYWALL_ABANDON_CANDIDATE_AT_KEY,
+  ]).catch(() => {});
 }
 
 async function markPaywallOpenedForAbandonReminders() {
@@ -237,8 +287,10 @@ async function maybeScheduleAbandonRemindersFromExit() {
   if (Platform.OS !== 'ios') return;
   const now = Date.now();
 
-  const openedRaw = (await AsyncStorage.getItem(PAYWALL_ABANDON_OPENED_AT_KEY)) ?? '0';
-  const candRaw = (await AsyncStorage.getItem(PAYWALL_ABANDON_CANDIDATE_AT_KEY)) ?? '0';
+  const openedRaw =
+    (await AsyncStorage.getItem(PAYWALL_ABANDON_OPENED_AT_KEY)) ?? '0';
+  const candRaw =
+    (await AsyncStorage.getItem(PAYWALL_ABANDON_CANDIDATE_AT_KEY)) ?? '0';
   const openedAt = paywallOpenedAtMs ?? Number(openedRaw);
   const candidateAt = paywallCandidateAtMs ?? Number(candRaw);
 
@@ -283,8 +335,14 @@ type PaywallTrackingContext = {
 };
 
 function logCustomerInfo(source: string, info: CustomerInfo) {
-  console.log(`[RevenueCat] ${source} entitlements.active`, info?.entitlements?.active ?? {});
-  console.log(`[RevenueCat] ${source} activeSubscriptions`, info?.activeSubscriptions ?? []);
+  console.log(
+    `[RevenueCat] ${source} entitlements.active`,
+    info?.entitlements?.active ?? {},
+  );
+  console.log(
+    `[RevenueCat] ${source} activeSubscriptions`,
+    info?.activeSubscriptions ?? [],
+  );
 }
 
 function markPurchasesUnconfigured(error?: unknown) {
@@ -310,7 +368,11 @@ function getRevenueCatApiKeyForPlatform(): string | null {
       apiKey = RC_WEB_API_KEY || RC_FALLBACK_API_KEY;
       break;
     default:
-      apiKey = RC_FALLBACK_API_KEY || RC_IOS_API_KEY || RC_ANDROID_API_KEY || RC_WEB_API_KEY;
+      apiKey =
+        RC_FALLBACK_API_KEY ||
+        RC_IOS_API_KEY ||
+        RC_ANDROID_API_KEY ||
+        RC_WEB_API_KEY;
       break;
   }
 
@@ -331,7 +393,10 @@ function getRevenueCatApiKeyForPlatform(): string | null {
   }
 
   const expectedPrefixes = getExpectedApiKeyPrefixes();
-  if (expectedPrefixes.length && !expectedPrefixes.some((prefix) => apiKey!.startsWith(prefix))) {
+  if (
+    expectedPrefixes.length &&
+    !expectedPrefixes.some((prefix) => apiKey!.startsWith(prefix))
+  ) {
     const message = `[RevenueCat] Invalid API key for platform "${Platform.OS}". Expected prefix ${expectedPrefixes.join(' or ')}.`;
     console.error(message);
     markPurchasesUnconfigured(new Error(message));
@@ -378,8 +443,10 @@ export function isRevenueCatEnabled() {
 export const ENTITLEMENT_ID = 'Accès à SOBRE.';
 
 // Web Purchase Links (à remplacer par vos vrais liens)
-export const WEB_PURCHASE_LINK_PROMO = '<<COLLER ICI le Web Purchase Link de l\'offering promo>>';
-export const WEB_PURCHASE_LINK_DEFAULT = '<<COLLER ICI le Web Purchase Link de l\'offering default>>';
+export const WEB_PURCHASE_LINK_PROMO =
+  "<<COLLER ICI le Web Purchase Link de l'offering promo>>";
+export const WEB_PURCHASE_LINK_DEFAULT =
+  "<<COLLER ICI le Web Purchase Link de l'offering default>>";
 
 export async function initRevenueCat(userId?: string): Promise<boolean> {
   if (!ENABLE_REVENUECAT) {
@@ -413,12 +480,15 @@ export async function initRevenueCat(userId?: string): Promise<boolean> {
             return;
           }
 
-          const subscription = AppState.addEventListener?.('change', (state) => {
-            if (state === 'active') {
-              subscription?.remove?.();
-              run();
-            }
-          });
+          const subscription = AppState.addEventListener?.(
+            'change',
+            (state) => {
+              if (state === 'active') {
+                subscription?.remove?.();
+                run();
+              }
+            },
+          );
         });
       }
 
@@ -431,6 +501,30 @@ export async function initRevenueCat(userId?: string): Promise<boolean> {
       purchasesConfigured = true;
       didConfigure = true;
       console.log('[RevenueCat] configure ok');
+
+      // Bridge device identifiers so RevenueCat can share attribution
+      // data with Meta (IDFA when ATT granted, IDFV always).
+      try {
+        Purchases.collectDeviceIdentifiers();
+        console.log('[RevenueCat] collectDeviceIdentifiers ok');
+      } catch (idErr) {
+        console.warn('[RevenueCat] collectDeviceIdentifiers failed', idErr);
+      }
+
+      // Forward the Facebook Anonymous ID to RevenueCat so it can match
+      // RevenueCat subscribers to Meta ad installs.
+      try {
+        const fbAnonId = await AppEventsLogger.getAnonymousID();
+        if (fbAnonId) {
+          Purchases.setFBAnonymousID(fbAnonId);
+          console.log(
+            '[RevenueCat] setFBAnonymousID ok',
+            fbAnonId.slice(0, 8) + '…',
+          );
+        }
+      } catch (fbErr) {
+        console.warn('[RevenueCat] setFBAnonymousID failed', fbErr);
+      }
 
       return true;
     } catch (error) {
@@ -446,7 +540,13 @@ export async function initRevenueCat(userId?: string): Promise<boolean> {
   return initPromise;
 }
 
-export function onCustomerInfoChange(cb: (hasAccess: boolean, info: CustomerInfo) => void) {
+// Track whether we've already sent a Meta conversion for this session
+// to avoid duplicate events when the listener fires multiple times.
+let lastMetaConversionProductId: string | null = null;
+
+export function onCustomerInfoChange(
+  cb: (hasAccess: boolean, info: CustomerInfo) => void,
+) {
   if (!ENABLE_REVENUECAT) {
     console.log('RevenueCat disabled - no customer info updates');
     return () => {}; // Return empty unsubscribe function
@@ -461,6 +561,35 @@ export function onCustomerInfoChange(cb: (hasAccess: boolean, info: CustomerInfo
     return Purchases.addCustomerInfoUpdateListener((info) => {
       logCustomerInfo('listener', info);
       const hasAccess = Boolean(info.entitlements?.active?.[ENTITLEMENT_ID]);
+
+      // ── Forward subscription state changes to Meta ──
+      // This catches trial-to-paid conversions and renewals that happen
+      // in the background (e.g., Apple processes the charge overnight).
+      if (hasAccess) {
+        try {
+          const ent = info.entitlements?.active?.[ENTITLEMENT_ID];
+          const productId = ent?.productIdentifier ?? 'unknown';
+          const periodType = ent?.periodType; // 'normal' | 'trial' | 'intro'
+
+          // Only send once per product to avoid duplicate events in the same session
+          if (productId !== lastMetaConversionProductId) {
+            lastMetaConversionProductId = productId;
+
+            if (periodType === 'normal') {
+              // Paid period — full subscription
+              logMetaSubscribe({ productId });
+              logMetaPurchase(0, 'EUR', { productId });
+              console.log('[RevenueCat→Meta] listener: Subscribe', {
+                productId,
+              });
+            }
+            // trial/intro events are already sent in presentPaywallAndTrack
+          }
+        } catch (metaErr) {
+          console.warn('[RevenueCat→Meta] listener event failed', metaErr);
+        }
+      }
+
       cb(hasAccess, info);
     });
   } catch (error) {
@@ -492,7 +621,9 @@ export async function isProActive(): Promise<boolean> {
 
 export async function getLatestCustomerInfo(): Promise<CustomerInfo | null> {
   if (!ENABLE_REVENUECAT) {
-    console.log('RevenueCat disabled - returning null for getLatestCustomerInfo');
+    console.log(
+      'RevenueCat disabled - returning null for getLatestCustomerInfo',
+    );
     return null;
   }
 
@@ -552,14 +683,19 @@ function buildPaywallTrackingPayload(
     payload.source = tracking.source;
   }
 
-  const offeringId = typeof offering?.identifier === 'string' ? offering.identifier : undefined;
+  const offeringId =
+    typeof offering?.identifier === 'string' ? offering.identifier : undefined;
   if (offeringId) {
     payload.offering_id = offeringId;
   }
 
   const paywallId =
-    (typeof offering?.paywall?.identifier === 'string' ? offering.paywall.identifier : undefined) ||
-    (typeof offering?.metadata?.paywall_id === 'string' ? offering.metadata.paywall_id : undefined);
+    (typeof offering?.paywall?.identifier === 'string'
+      ? offering.paywall.identifier
+      : undefined) ||
+    (typeof offering?.metadata?.paywall_id === 'string'
+      ? offering.metadata.paywall_id
+      : undefined);
 
   if (paywallId) {
     payload.paywall_id = paywallId;
@@ -572,20 +708,77 @@ async function presentPaywallAndTrack(
   params: { offering?: any; displayCloseButton?: boolean },
   tracking?: PaywallTrackingContext,
 ) {
+  // ── Meta: log InitiateCheckout when paywall is shown ──
+  const offeringId =
+    typeof params?.offering?.identifier === 'string'
+      ? params.offering.identifier
+      : undefined;
+  logMetaInitiateCheckout({
+    placement: tracking?.placement,
+    offeringId,
+  });
+
   const result = await PurchasesUI.presentPaywall(params);
-  const payload = buildPaywallTrackingPayload(result, tracking, params?.offering);
+  const payload = buildPaywallTrackingPayload(
+    result,
+    tracking,
+    params?.offering,
+  );
 
   await capturePostHogEvent('paywall_result', payload);
 
-  if (result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED) {
+  if (
+    result === PAYWALL_RESULT.PURCHASED ||
+    result === PAYWALL_RESULT.RESTORED
+  ) {
     await capturePostHogEvent('paywall_converted', payload);
+
+    // ── Meta: send conversion events after successful purchase ──
+    try {
+      const info = await Purchases.getCustomerInfo();
+      const activeEntitlement = info?.entitlements?.active?.[ENTITLEMENT_ID];
+
+      if (activeEntitlement) {
+        const productId = activeEntitlement.productIdentifier;
+        const periodType = activeEntitlement.periodType; // 'normal' | 'trial' | 'intro'
+        // Use the latest transaction's price if available, otherwise 0
+        const latestPrice = (activeEntitlement as any)?.latestPurchaseDateMillis
+          ? 0
+          : 0;
+
+        if (periodType === 'trial' || periodType === 'intro') {
+          // User started a free trial
+          logMetaStartTrial({ productId, offeringId });
+          console.log('[RevenueCat→Meta] StartTrial', {
+            productId,
+            periodType,
+          });
+        } else {
+          // Paid subscription started (no trial, or trial already converted)
+          logMetaSubscribe({ productId, offeringId });
+          console.log('[RevenueCat→Meta] Subscribe', { productId, periodType });
+        }
+
+        // Always send the purchase event — this is the primary signal for
+        // Meta Ads attribution and SKAdNetwork conversion value updates.
+        // Revenue = 0 for trials (actual revenue comes when trial converts).
+        logMetaPurchase(0, 'EUR', { productId, offeringId });
+      }
+    } catch (metaErr) {
+      console.warn(
+        '[RevenueCat→Meta] Failed to send conversion events',
+        metaErr,
+      );
+    }
   }
 
   return result;
 }
 
 // Paywall standard (offering "default")
-export async function showDefaultPaywall(tracking?: PaywallTrackingContext): Promise<PAYWALL_RESULT> {
+export async function showDefaultPaywall(
+  tracking?: PaywallTrackingContext,
+): Promise<PAYWALL_RESULT> {
   if (!ENABLE_REVENUECAT) {
     console.warn('RevenueCat disabled - cannot show default paywall');
     return PAYWALL_RESULT.NOT_PRESENTED;
@@ -598,8 +791,13 @@ export async function showDefaultPaywall(tracking?: PaywallTrackingContext): Pro
       return PAYWALL_RESULT.NOT_PRESENTED;
     }
 
-    if (!CAN_USE_NATIVE_PAYWALL || typeof PurchasesUI?.presentPaywall !== 'function') {
-      console.warn('Native paywall UI unavailable, falling back to web purchase flow');
+    if (
+      !CAN_USE_NATIVE_PAYWALL ||
+      typeof PurchasesUI?.presentPaywall !== 'function'
+    ) {
+      console.warn(
+        'Native paywall UI unavailable, falling back to web purchase flow',
+      );
       await openWebPurchase('default');
       return PAYWALL_RESULT.NOT_PRESENTED;
     }
@@ -608,10 +806,16 @@ export async function showDefaultPaywall(tracking?: PaywallTrackingContext): Pro
     const mainOffering = offerings.all?.main;
 
     const result = mainOffering
-      ? await presentPaywallAndTrack({ offering: mainOffering, displayCloseButton: false }, tracking)
+      ? await presentPaywallAndTrack(
+          { offering: mainOffering, displayCloseButton: false },
+          tracking,
+        )
       : await presentPaywallAndTrack({ displayCloseButton: false }, tracking);
 
-    if (result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED) {
+    if (
+      result === PAYWALL_RESULT.PURCHASED ||
+      result === PAYWALL_RESULT.RESTORED
+    ) {
       await clearPaywallAbandonState();
       await cancelPaywallAbandonReminders();
       await schedulePostPurchaseBlockersReminder();
@@ -629,7 +833,9 @@ export async function showDefaultPaywall(tracking?: PaywallTrackingContext): Pro
 }
 
 // Paywall promo (offering "promo")
-export async function showPromoPaywall(tracking?: PaywallTrackingContext): Promise<PAYWALL_RESULT> {
+export async function showPromoPaywall(
+  tracking?: PaywallTrackingContext,
+): Promise<PAYWALL_RESULT> {
   if (!ENABLE_REVENUECAT) {
     console.warn('RevenueCat disabled - cannot show promo paywall');
     return PAYWALL_RESULT.NOT_PRESENTED;
@@ -642,8 +848,13 @@ export async function showPromoPaywall(tracking?: PaywallTrackingContext): Promi
       return PAYWALL_RESULT.NOT_PRESENTED;
     }
 
-    if (!CAN_USE_NATIVE_PAYWALL || typeof PurchasesUI?.presentPaywall !== 'function') {
-      console.warn('Native paywall UI unavailable, falling back to web purchase flow');
+    if (
+      !CAN_USE_NATIVE_PAYWALL ||
+      typeof PurchasesUI?.presentPaywall !== 'function'
+    ) {
+      console.warn(
+        'Native paywall UI unavailable, falling back to web purchase flow',
+      );
       await openWebPurchase('promo');
       return PAYWALL_RESULT.NOT_PRESENTED;
     }
@@ -653,13 +864,24 @@ export async function showPromoPaywall(tracking?: PaywallTrackingContext): Promi
 
     let result: PAYWALL_RESULT;
     if (!promoOffering) {
-      console.warn('Promo offering not configured, falling back to default paywall');
-      result = await presentPaywallAndTrack({ displayCloseButton: true }, tracking);
+      console.warn(
+        'Promo offering not configured, falling back to default paywall',
+      );
+      result = await presentPaywallAndTrack(
+        { displayCloseButton: true },
+        tracking,
+      );
     } else {
-      result = await presentPaywallAndTrack({ offering: promoOffering, displayCloseButton: true }, tracking);
+      result = await presentPaywallAndTrack(
+        { offering: promoOffering, displayCloseButton: true },
+        tracking,
+      );
     }
 
-    if (result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED) {
+    if (
+      result === PAYWALL_RESULT.PURCHASED ||
+      result === PAYWALL_RESULT.RESTORED
+    ) {
       await clearPaywallAbandonState();
       await cancelPaywallAbandonReminders();
       await schedulePostPurchaseBlockersReminder();
@@ -679,8 +901,12 @@ export async function showPromoPaywall(tracking?: PaywallTrackingContext): Promi
 // Fallback web pour les paiements
 export async function openWebPurchase(offering: 'promo' | 'default') {
   await promoEvents.webPurchaseClick(offering);
-  const url = offering === 'promo' ? WEB_PURCHASE_LINK_PROMO : WEB_PURCHASE_LINK_DEFAULT;
-  if (url && url !== `<<COLLER ICI le Web Purchase Link de l'offering ${offering}>>`) {
+  const url =
+    offering === 'promo' ? WEB_PURCHASE_LINK_PROMO : WEB_PURCHASE_LINK_DEFAULT;
+  if (
+    url &&
+    url !== `<<COLLER ICI le Web Purchase Link de l'offering ${offering}>>`
+  ) {
     Linking.openURL(url);
   } else {
     console.warn(`Web purchase link not configured for offering: ${offering}`);
@@ -736,14 +962,9 @@ export async function openManageSubscription() {
     android: 'https://play.google.com/store/account/subscriptions',
     default: 'https://apps.apple.com/account/subscriptions',
   })!;
-  try { 
-    await Linking.openURL(url); 
+  try {
+    await Linking.openURL(url);
   } catch (error) {
-    console.warn('Impossible d\'ouvrir la gestion d\'abonnement:', error);
+    console.warn("Impossible d'ouvrir la gestion d'abonnement:", error);
   }
 }
-
-
-
-
-

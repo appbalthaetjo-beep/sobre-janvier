@@ -1,16 +1,29 @@
-import React, { useState } from 'react';
-import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ArrowLeft } from 'lucide-react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
+import { ArrowLeft } from 'lucide-react-native';
+import React, { useState } from 'react';
+import {
+  Alert,
+  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useHaptics } from '@/hooks/useHaptics';
-import { setShouldShowOnboardingFlag } from '@/utils/onboardingFlag';
+import { logMetaCompleteRegistration } from '@/src/lib/metaConversionEvents';
 import { trackOnboardingScreen } from '@/src/lib/posthog';
-import { initRevenueCat, isProActive, isRevenueCatEnabled, showDefaultPaywall } from '@/src/lib/revenuecat';
+import {
+  initRevenueCat,
+  isProActive,
+  isRevenueCatEnabled,
+  showDefaultPaywall,
+} from '@/src/lib/revenuecat';
+import { setShouldShowOnboardingFlag } from '@/utils/onboardingFlag';
 
 const PAYWALL_ONBOARDING_STEP = 38;
 const PAYWALL_ONBOARDING_CONTEXT = {
@@ -72,7 +85,10 @@ export default function TrialReminderScreen() {
           console.warn('RevenueCat init failed before paywall', error);
         }
 
-        void trackOnboardingScreen({ screen_name: 'paywall', ...PAYWALL_ONBOARDING_CONTEXT });
+        void trackOnboardingScreen({
+          screen_name: 'paywall',
+          ...PAYWALL_ONBOARDING_CONTEXT,
+        });
 
         try {
           await showDefaultPaywall(PAYWALL_ONBOARDING_CONTEXT);
@@ -91,6 +107,7 @@ export default function TrialReminderScreen() {
       }
 
       await markOnboardingComplete();
+      logMetaCompleteRegistration({ method: 'onboarding' });
       navigateToApp();
     } catch (error) {
       console.error('TrialReminderScreen: failed to continue', error);
@@ -115,10 +132,16 @@ export default function TrialReminderScreen() {
       </View>
 
       <View style={styles.content}>
-        <Text style={styles.title}>On t’enverra un rappel{'\n'}avant la fin de ton essai gratuit</Text>
+        <Text style={styles.title}>
+          On t’enverra un rappel{'\n'}avant la fin de ton essai gratuit
+        </Text>
 
         <View style={styles.bellWrap}>
-          <Ionicons name="notifications" size={132} color="rgba(255,255,255,0.16)" />
+          <Ionicons
+            name="notifications"
+            size={132}
+            color="rgba(255,255,255,0.16)"
+          />
           <View style={styles.badge}>
             <Text style={styles.badgeText}>1</Text>
           </View>
@@ -130,14 +153,20 @@ export default function TrialReminderScreen() {
             <Text style={styles.noPaymentText}>Aucun paiement maintenant</Text>
           </View>
 
-          <TouchableOpacity style={styles.ctaWrapper} onPress={handleContinue} activeOpacity={0.9}>
+          <TouchableOpacity
+            style={styles.ctaWrapper}
+            onPress={handleContinue}
+            activeOpacity={0.9}
+          >
             <LinearGradient
               colors={['#FFEFA3', '#FFD44D', '#FFBF00']}
               start={{ x: 0, y: 0.5 }}
               end={{ x: 1, y: 0.5 }}
               style={styles.cta}
             >
-              <Text style={styles.ctaText}>{isLoading ? 'Chargement…' : 'Continuer gratuitement'}</Text>
+              <Text style={styles.ctaText}>
+                {isLoading ? 'Chargement…' : 'Continuer gratuitement'}
+              </Text>
             </LinearGradient>
           </TouchableOpacity>
         </View>
