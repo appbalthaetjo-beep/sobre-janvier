@@ -40,7 +40,7 @@
     "ios": {
       "appleTeamId": "CTJ238754P",
       "bundleIdentifier": "com.balthazar.sobre",
-      "buildNumber": "60",
+      "buildNumber": "75",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSPhotoLibraryUsageDescription": "Nous avons besoin d'accéder à votre galerie pour que vous puissiez choisir une photo de profil.",

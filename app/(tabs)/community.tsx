@@ -14,9 +14,12 @@ import {
 } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Send } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useFirestore } from '@/hooks/useFirestore';
+import { SUPABASE_DEBUG } from '@/lib/supabase';
+import { USE_SUPABASE_AUTH } from '@/lib/auth/authConfig';
 
 interface CommunityPost {
   id: string;
@@ -29,7 +32,7 @@ interface CommunityPost {
 }
 
 export default function CommunityScreen() {
-  const DISCORD_INVITE = 'https://discord.gg/hYu3WP7D';
+  const DISCORD_INVITE = 'https://discord.com/invite/Hm8XDy5nJD';
   const { user } = useAuth();
   const [inputValue, setInputValue] = useState('');
   const [sending, setSending] = useState(false);
@@ -37,6 +40,8 @@ export default function CommunityScreen() {
   const [activeTab, setActiveTab] = useState<'feed' | 'ranking'>('feed');
   const listRef = useRef<FlatList<CommunityPost>>(null);
   const shouldScrollToTopRef = useRef(false);
+  const hasShownErrorAlertRef = useRef(false);
+  const postsRef = useRef<CommunityPost[]>([]);
 
   const {
     subscribeToCommunityPosts,
@@ -48,8 +53,30 @@ export default function CommunityScreen() {
     [...list].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
   useEffect(() => {
+    console.log('[Community] USE_SUPABASE_AUTH', USE_SUPABASE_AUTH);
+    console.log('[Community] SUPABASE_DEBUG', SUPABASE_DEBUG);
     subscribeRef.current = subscribeToCommunityPosts;
   }, [subscribeToCommunityPosts]);
+
+  // Toujours garder une r\u00e9f\u00e9rence fra\u00eeche sur les posts pour la gestion d'erreur
+  useEffect(() => {
+    postsRef.current = posts;
+  }, [posts]);
+
+  const handleCommunityError = (error: any) => {
+    console.warn('[Community] subscribe error', error);
+
+    // Si on a d\u00e9j\u00e0 des posts affich\u00e9s, on ignore l'alerte (simple log)
+    if (postsRef.current.length > 0) {
+      return;
+    }
+
+    // Sinon on affiche une seule fois l'alerte
+    if (!hasShownErrorAlertRef.current) {
+      hasShownErrorAlertRef.current = true;
+      Alert.alert('Erreur', "Impossible de charger les messages maintenant.");
+    }
+  };
 
   useEffect(() => {
     const unsubscribe = subscribeRef.current(
@@ -57,10 +84,7 @@ export default function CommunityScreen() {
         const next = sortByCreatedAt(incoming.map(normalizePost));
         setPosts(next);
       },
-      (error) => {
-        console.warn('[Community] subscribe error', error);
-        Alert.alert('Erreur', "Impossible de charger les messages maintenant.");
-      },
+      handleCommunityError,
     );
 
     return () => {
@@ -131,9 +155,14 @@ export default function CommunityScreen() {
     return (
       <View style={styles.postCard}>
         <View style={styles.postHeader}>
-          <View style={styles.avatar}>
+          <LinearGradient
+            colors={['#FFEFA3', '#FFD44D', '#FFBF00']}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={styles.avatarGradient}
+          >
             <Text style={styles.avatarText}>{getAuthorInitial(item.authorId, item.authorName)}</Text>
-          </View>
+          </LinearGradient>
           <View style={styles.postMeta}>
             <Text style={styles.postAuthor}>{formatAuthor(item.authorId, item.authorName)}</Text>
             <Text style={styles.postTimestamp}>{formatDate(item.createdAt)}</Text>
@@ -458,17 +487,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  avatar: {
+  avatarGradient: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: '#FFD700',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+    overflow: 'hidden',
   },
   avatarText: {
-    color: '#000000',
+    color: '#6B4A00',
     fontFamily: 'Inter-SemiBold',
     fontSize: 16,
   },

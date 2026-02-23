@@ -2,7 +2,7 @@ import type { User } from '@supabase/supabase-js';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Linking from 'expo-linking';
 
-import { supabase } from '@/lib/supabase';
+import { SUPABASE_DEBUG, probeSupabaseAuthConnectivity, supabase } from '@/lib/supabase';
 import { linkRevenueCatUser, unlinkRevenueCatUser } from '@/lib/auth/revenuecatAuth';
 import { ensureSupabaseProfile } from '@/utils/publicUser';
 
@@ -42,6 +42,20 @@ function getDefaultRedirectUrl() {
   return Linking.createURL('auth/login');
 }
 
+function isNetworkRequestFailure(error: unknown) {
+  const message = (error as any)?.message as string | undefined;
+  return typeof message === 'string' && message.toLowerCase().includes('network request failed');
+}
+
+async function logAuthNetworkProbe(context: string) {
+  try {
+    const probe = await probeSupabaseAuthConnectivity();
+    console.warn(`[SupabaseAuth] ${context}: connectivity probe`, probe);
+  } catch (error) {
+    console.warn(`[SupabaseAuth] ${context}: probe failed`, error);
+  }
+}
+
 async function syncSupabaseProfile(user: User | null) {
   if (!user) {
     return;
@@ -67,20 +81,61 @@ async function syncSupabaseProfile(user: User | null) {
 
 export async function signInWithEmail(email: string, password: string): Promise<AuthResult> {
   try {
+    console.log('[SupabaseAuth] signInWithEmail:start', {
+      url: SUPABASE_DEBUG.url,
+      configured: SUPABASE_DEBUG.configured,
+      anonKeyPrefix: SUPABASE_DEBUG.anonKeyPrefix,
+      anonKeySuffix: SUPABASE_DEBUG.anonKeySuffix,
+      httpTraceEnabled: SUPABASE_DEBUG.httpTraceEnabled,
+      emailDomain: email.includes('@') ? email.split('@').pop() : null,
+    });
+
     const { data, error } = await supabase.auth.signInWithPassword({
       email: email.trim(),
       password,
     });
+    console.log('[SupabaseAuth] signInWithEmail:signInWithPassword result', {
+      data: {
+        hasUser: Boolean(data?.user),
+        userId: data?.user?.id ?? null,
+        hasSession: Boolean(data?.session),
+        sessionUserId: data?.session?.user?.id ?? null,
+      },
+      error: error
+        ? {
+            message: error.message ?? null,
+            status: (error as any)?.status ?? null,
+            code: (error as any)?.code ?? null,
+            details: (error as any)?.details ?? null,
+          }
+        : null,
+    });
 
     if (error) {
+      console.warn('[SupabaseAuth] signInWithEmail:error', {
+        message: error.message ?? null,
+        status: (error as any)?.status ?? null,
+        code: (error as any)?.code ?? null,
+      });
+      if (isNetworkRequestFailure(error)) {
+        await logAuthNetworkProbe('signInWithEmail:error');
+      }
       return { user: null, error: toFrenchAuthErrorMessage(error, 'Erreur de connexion') };
     }
 
     await syncSupabaseProfile(data.user ?? null);
     await linkRevenueCatUser(data.user?.id ?? null, 'email_sign_in');
-    await syncSupabaseProfile(data.user ?? null);
     return { user: data.user ?? null, error: null };
   } catch (error) {
+    console.warn('[SupabaseAuth] signInWithEmail:unexpected', {
+      message: (error as any)?.message ?? String(error ?? 'Unknown error'),
+      name: (error as any)?.name ?? null,
+      stack: (error as any)?.stack ?? null,
+      error,
+    });
+    if (isNetworkRequestFailure(error)) {
+      await logAuthNetworkProbe('signInWithEmail:unexpected');
+    }
     return { user: null, error: toFrenchAuthErrorMessage(error, 'Erreur de connexion') };
   }
 }

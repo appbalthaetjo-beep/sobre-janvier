@@ -1,15 +1,48 @@
 import { USE_SUPABASE_AUTH } from '@/lib/auth/authConfig';
-import { supabase } from '@/lib/supabase';
+import { SUPABASE_DEBUG, decodeJwtClaims, supabase } from '@/lib/supabase';
 import { getOrCreatePublicUserId } from '@/utils/publicUser';
 
 type FirestoreResult<T> = { data: T; error: string | null };
 type FirestoreErrorOnly = { error: string | null };
 
 const COMMUNITY_TABLE = 'community_messages';
+const COMMUNITY_FEED_RPC = 'community_feed';
+const COMMUNITY_WHOAMI_RPC = 'community_whoami';
+const COMMUNITY_FETCH_LIMIT = 50;
+const COMMUNITY_POLL_INTERVAL_MS = 15000;
+
+let hasLoggedCommunityAuthContext = false;
+
+function toErrorMessage(error: unknown): string {
+  return (error as any)?.message ?? String(error ?? 'Unknown error');
+}
+
+function isRpcMissing(error: any) {
+  const code = error?.code;
+  return code === 'PGRST202' || code === '42883';
+}
+
+function normalizeRpcRows(data: unknown): any[] {
+  if (!data) {
+    return [];
+  }
+  if (Array.isArray(data)) {
+    return data;
+  }
+  return [data];
+}
+
+function toStringTail(value: unknown, tailLength = 10): string | null {
+  if (typeof value !== 'string' || value.length === 0) {
+    return null;
+  }
+  return value.slice(-tailLength);
+}
 
 export function useFirestore() {
   if (USE_SUPABASE_AUTH) {
     const ok: FirestoreErrorOnly = { error: null };
+
     const mapSupabaseMessage = (row: any) => {
       const createdAtRaw = row?.created_at ? new Date(row.created_at) : new Date();
       const createdAt = Number.isNaN(createdAtRaw.getTime()) ? new Date() : createdAtRaw;
@@ -46,27 +79,152 @@ export function useFirestore() {
     const saveCompletedChallenges = async (_challenges: string[]): Promise<FirestoreErrorOnly> => ok;
     const loadCompletedChallenges = async (): Promise<FirestoreResult<string[]>> => ({ data: [], error: null });
 
-    const fetchCommunityPostsOnce = async (): Promise<FirestoreResult<any[]>> => {
+    const logCommunityAuthContext = async (label: string) => {
+      if (hasLoggedCommunityAuthContext) {
+        return;
+      }
+
+      hasLoggedCommunityAuthContext = true;
+
       try {
-        const { data, error } = await supabase
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) {
+          console.warn(`[Community][Supabase] ${label}: getSession error`, sessionError);
+        }
+
+        const accessToken = sessionData?.session?.access_token ?? null;
+        const claims = decodeJwtClaims(accessToken);
+
+        console.log(`[Community][Supabase] ${label}: auth context`, {
+          url: SUPABASE_DEBUG.url,
+          configured: SUPABASE_DEBUG.configured,
+          anonKeyPrefix: SUPABASE_DEBUG.anonKeyPrefix,
+          anonKeySuffix: SUPABASE_DEBUG.anonKeySuffix,
+          hasSession: Boolean(sessionData?.session),
+          sessionUserId: sessionData?.session?.user?.id ?? null,
+          sessionRole: claims?.role ?? null,
+          sessionSubSuffix: toStringTail(claims?.sub),
+          tokenExp: claims?.exp ?? null,
+        });
+
+        const { data: whoAmIData, error: whoAmIError } = await supabase.rpc(COMMUNITY_WHOAMI_RPC);
+        if (whoAmIError) {
+          if (isRpcMissing(whoAmIError)) {
+            console.warn('[Community][Supabase] whoami RPC is missing. Run supabase/sql/community_messages.sql');
+            return;
+          }
+          console.warn('[Community][Supabase] whoami RPC error', {
+            code: whoAmIError.code ?? null,
+            message: whoAmIError.message ?? null,
+            details: whoAmIError.details ?? null,
+          });
+          return;
+        }
+
+        const whoAmIRow = normalizeRpcRows(whoAmIData)[0] ?? null;
+        console.log('[Community][Supabase] whoami RPC', whoAmIRow);
+      } catch (error) {
+        console.warn(`[Community][Supabase] ${label}: auth context unexpected error`, error);
+      }
+    };
+
+    const fetchCommunityPostsViaRpc = async (): Promise<{ data: any[]; error: string | null; missingRpc: boolean }> => {
+      try {
+        const { data, error } = await supabase.rpc(COMMUNITY_FEED_RPC, { p_limit: COMMUNITY_FETCH_LIMIT });
+        console.log('[Community][Supabase] community_feed RPC response', {
+          data,
+          error: error
+            ? {
+                code: error.code ?? null,
+                message: error.message ?? null,
+                details: error.details ?? null,
+              }
+            : null,
+        });
+
+        if (error) {
+          if (isRpcMissing(error)) {
+            return { data: [], error: null, missingRpc: true };
+          }
+
+          console.warn('[Community][Supabase] community_feed RPC failed', {
+            code: error.code ?? null,
+            message: error.message ?? null,
+            details: error.details ?? null,
+          });
+          return { data: [], error: error.message ?? 'community_feed RPC failed', missingRpc: false };
+        }
+
+        const rows = normalizeRpcRows(data);
+        const posts = rows.map(mapSupabaseMessage);
+        return { data: posts, error: null, missingRpc: false };
+      } catch (error) {
+        console.warn('[Community][Supabase] community_feed RPC exception', {
+          message: (error as any)?.message ?? String(error ?? 'Unknown error'),
+          name: (error as any)?.name ?? null,
+          stack: (error as any)?.stack ?? null,
+          error,
+        });
+        return { data: [], error: toErrorMessage(error), missingRpc: false };
+      }
+    };
+
+    const fetchCommunityPostsViaTable = async (): Promise<FirestoreResult<any[]>> => {
+      try {
+        const { data, error, count } = await supabase
           .from(COMMUNITY_TABLE)
-          .select('*')
-          .order('created_at', { ascending: true });
+          .select('*', { count: 'exact' })
+          .order('created_at', { ascending: false })
+          .limit(COMMUNITY_FETCH_LIMIT);
+        console.log('[Community][Supabase] table feed fallback response', {
+          data,
+          error: error
+            ? {
+                code: error.code ?? null,
+                message: error.message ?? null,
+                details: error.details ?? null,
+              }
+            : null,
+          count: count ?? null,
+        });
+
+        console.log('[Community][Supabase] table feed fallback', {
+          rows: data?.length ?? 0,
+          count: count ?? null,
+          error: error?.message ?? null,
+        });
 
         if (error) {
           return { data: [], error: error.message };
         }
 
-        if (__DEV__) {
-          console.log('[community] supabase fetch rows', data?.length ?? 0, data);
-        }
-
-        const posts = data?.map(mapSupabaseMessage) ?? [];
-
-        return { data: posts, error: null };
-      } catch (error: any) {
-        return { data: [], error: error?.message ?? String(error ?? 'Unknown error') };
+        return { data: (data ?? []).map(mapSupabaseMessage), error: null };
+      } catch (error) {
+        console.warn('[Community][Supabase] table feed fallback exception', {
+          message: (error as any)?.message ?? String(error ?? 'Unknown error'),
+          name: (error as any)?.name ?? null,
+          stack: (error as any)?.stack ?? null,
+          error,
+        });
+        return { data: [], error: toErrorMessage(error) };
       }
+    };
+
+    const fetchCommunityPostsOnce = async (): Promise<FirestoreResult<any[]>> => {
+      await logCommunityAuthContext('fetchCommunityPostsOnce');
+
+      const rpcResult = await fetchCommunityPostsViaRpc();
+      if (!rpcResult.missingRpc) {
+        console.log('[Community][Supabase] feed source', {
+          source: 'rpc',
+          rows: rpcResult.data.length,
+          error: rpcResult.error,
+        });
+        return { data: rpcResult.data, error: rpcResult.error };
+      }
+
+      console.warn('[Community][Supabase] community_feed RPC missing, using table fallback.');
+      return fetchCommunityPostsViaTable();
     };
 
     const subscribeToCommunityPosts = (
@@ -82,15 +240,48 @@ export function useFirestore() {
         onPosts(currentPosts);
       };
 
-      fetchCommunityPostsOnce()
-        .then(({ data, error }) => {
+      const syncFeed = async (source: 'initial' | 'poll') => {
+        try {
+          const { data, error } = await fetchCommunityPostsOnce();
           if (error) {
-            onError?.(new Error(error));
+            if (source === 'initial') {
+              onError?.(new Error(error));
+            } else {
+              console.warn('[Community][Supabase] poll fetch failed', error);
+            }
             return;
           }
+
+          if (source === 'initial') {
+            console.log('[Community][Supabase] initial feed result', { count: data.length });
+          }
+
           pushPosts(data);
-        })
-        .catch((error) => onError?.(error as Error));
+        } catch (error) {
+          if (source === 'initial') {
+            console.warn('[Community][Supabase] initial fetch exception', {
+              message: (error as any)?.message ?? String(error ?? 'Unknown error'),
+              name: (error as any)?.name ?? null,
+              stack: (error as any)?.stack ?? null,
+              error,
+            });
+            onError?.(error as Error);
+          } else {
+            console.warn('[Community][Supabase] poll fetch unexpected error', {
+              message: (error as any)?.message ?? String(error ?? 'Unknown error'),
+              name: (error as any)?.name ?? null,
+              stack: (error as any)?.stack ?? null,
+              error,
+            });
+          }
+        }
+      };
+
+      void syncFeed('initial');
+
+      const pollTimer = setInterval(() => {
+        void syncFeed('poll');
+      }, COMMUNITY_POLL_INTERVAL_MS);
 
       let channel: any = null;
       try {
@@ -100,6 +291,7 @@ export function useFirestore() {
             'postgres_changes',
             { event: 'INSERT', schema: 'public', table: COMMUNITY_TABLE },
             (payload) => {
+              console.log('[Community][Supabase] realtime INSERT payload', payload?.new);
               const mapped = mapSupabaseMessage(payload.new);
               const next = [...currentPosts.filter((p) => p.id !== mapped.id), mapped];
               pushPosts(next);
@@ -107,7 +299,10 @@ export function useFirestore() {
           )
           .subscribe((status) => {
             if (status === 'CHANNEL_ERROR') {
+              console.warn('[Community][Supabase] realtime CHANNEL_ERROR');
               onError?.(new Error('Realtime subscription error'));
+            } else {
+              console.log('[Community][Supabase] realtime status', status);
             }
           });
       } catch (error) {
@@ -116,6 +311,8 @@ export function useFirestore() {
 
       return () => {
         active = false;
+        clearInterval(pollTimer);
+
         if (channel?.unsubscribe) {
           try {
             void channel.unsubscribe();
@@ -143,28 +340,50 @@ export function useFirestore() {
           return { data: null, error: 'Message vide' };
         }
 
+        await logCommunityAuthContext('createCommunityPost');
+
         const { publicUserId, fullName, avatarUrl } = await getOrCreatePublicUserId({
           fullName: metadata?.authorName,
         });
         const authorName = metadata?.authorName ?? fullName ?? 'Utilisateur';
 
-        const { data, error } = await supabase
-          .from(COMMUNITY_TABLE)
-          .insert({
-            public_user_id: publicUserId,
-            author_name: authorName,
-            author_avatar: avatarUrl ?? null,
-            content: trimmed,
-          })
-          .select('*')
-          .single();
+        const payload = {
+          public_user_id: publicUserId,
+          author_name: authorName,
+          author_avatar: avatarUrl ?? null,
+          content: trimmed,
+        };
+
+        const { error } = await supabase.from(COMMUNITY_TABLE).insert(payload);
 
         if (error) {
+          console.warn('[Community][Supabase] insert failed', {
+            code: error.code ?? null,
+            message: error.message ?? null,
+            details: error.details ?? null,
+          });
           return { data: null, error: error.message };
         }
 
-        const mapped = mapSupabaseMessage(data);
-        return { data: { id: mapped.id, post: mapped }, error: null };
+        const optimisticPost = {
+          id: `local-${Date.now()}`,
+          authorId: publicUserId,
+          authorName,
+          authorAvatar: avatarUrl ?? null,
+          content: trimmed,
+          createdAt: new Date(),
+          likedBy: [],
+        };
+
+        const refreshed = await fetchCommunityPostsOnce();
+        if (!refreshed.error && refreshed.data.length > 0) {
+          const inserted = refreshed.data.find((post) => post.authorId === publicUserId && post.content === trimmed);
+          if (inserted) {
+            return { data: { id: inserted.id, post: inserted }, error: null };
+          }
+        }
+
+        return { data: { id: optimisticPost.id, post: optimisticPost }, error: null };
       } catch (error: any) {
         return { data: null, error: error?.message ?? String(error ?? 'Unknown error') };
       }
@@ -194,8 +413,9 @@ export function useFirestore() {
     };
   }
 
-  // Évite d'importer Firebase/Firestore quand Supabase Auth est actif.
+  // Evite d'importer Firebase/Firestore quand Supabase Auth est actif.
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { useFirestoreFirebase } = require('./useFirestore.firebase');
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   return useFirestoreFirebase();
 }

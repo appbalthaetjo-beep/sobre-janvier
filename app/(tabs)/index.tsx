@@ -312,31 +312,40 @@ export default function HomeScreen() {
             style={styles.progressContainer}
             onPress={() => router.push('/(tabs)/progress')}
           >
-            {/* Titre avec cristal à gauche */}
-            <View style={styles.progressHeader}>
-              <View style={styles.nextCrystalIconLeft}>
-                <Image
-                  source={{ uri: getNextMilestone().image }}
-                  style={styles.nextCrystalIconImage}
-                  resizeMode="contain"
-                />
+            <LinearGradient
+              colors={['#FFEFA3', '#FFD44D', '#FFBF00']}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={styles.progressGradientBorder}
+            >
+              <View style={styles.progressCard}>
+                {/* Titre avec cristal à gauche */}
+                <View style={styles.progressHeader}>
+                  <View style={styles.nextCrystalIconLeft}>
+                    <Image
+                      source={{ uri: getNextMilestone().image }}
+                      style={styles.nextCrystalIconImage}
+                      resizeMode="contain"
+                    />
+                  </View>
+                  <Text style={styles.progressTitle}>
+                    Prochain palier : {getNextMilestone().title}
+                  </Text>
+                </View>
+                
+                {/* Barre de progression raccourcie */}
+                <View style={styles.progressBarContainer}>
+                  <View style={styles.progressBarBg}>
+                    <View 
+                      style={[
+                        styles.progressBarFill,
+                        { width: `${getMilestoneProgress()}%` }
+                      ]} 
+                    />
+                  </View>
+                </View>
               </View>
-              <Text style={styles.progressTitle}>
-                Prochain palier : {getNextMilestone().title}
-              </Text>
-            </View>
-            
-            {/* Barre de progression raccourcie */}
-            <View style={styles.progressBarContainer}>
-              <View style={styles.progressBarBg}>
-                <View 
-                  style={[
-                    styles.progressBarFill,
-                    { width: `${getMilestoneProgress()}%` }
-                  ]} 
-                />
-              </View>
-            </View>
+            </LinearGradient>
           </TouchableOpacity>
 
           {/* Daily Reset */}
@@ -361,7 +370,14 @@ export default function HomeScreen() {
                       </Text>
                       {locked ? (
                         <TouchableOpacity style={styles.dailyResetButton} onPress={() => router.push('/daily-reset')}>
-                          <Text style={styles.dailyResetButtonText}>Faire mon Daily Reset</Text>
+                          <LinearGradient
+                            colors={['#FFEFA3', '#FFD44D', '#FFBF00']}
+                            start={{ x: 0, y: 0.5 }}
+                            end={{ x: 1, y: 0.5 }}
+                            style={styles.dailyResetButtonGradient}
+                          >
+                            <Text style={styles.dailyResetButtonText}>Faire mon Daily Reset</Text>
+                          </LinearGradient>
                         </TouchableOpacity>
                       ) : null}
                     </>
@@ -541,14 +557,16 @@ const styles = StyleSheet.create({
   },
   dailyResetButton: {
     marginTop: 12,
-    backgroundColor: '#FFD700',
     borderRadius: 14,
+    overflow: 'hidden',
+  },
+  dailyResetButtonGradient: {
     paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
   dailyResetButtonText: {
-    color: '#000000',
+    color: '#6B4A00',
     fontSize: 15,
     fontFamily: 'Inter-Bold',
   },
@@ -649,12 +667,9 @@ const styles = StyleSheet.create({
   // 3. Barre de progression
   progressContainer: {
     marginHorizontal: 24,
-    backgroundColor: '#1A1A1A',
     borderRadius: 16,
-    padding: 20,
+    padding: 1,
     marginBottom: 24,
-    borderWidth: 3,
-    borderColor: '#FFD700',
     shadowColor: '#FFD700',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.4,
@@ -662,6 +677,15 @@ const styles = StyleSheet.create({
     elevation: 8,
     // Dégradé subtil interne
     position: 'relative',
+  },
+  progressGradientBorder: {
+    borderRadius: 15,
+    padding: 1,
+  },
+  progressCard: {
+    backgroundColor: '#1A1A1A',
+    borderRadius: 14,
+    padding: 18,
   },
   progressHeader: {
     flexDirection: 'row',
