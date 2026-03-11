@@ -21,6 +21,8 @@ const FORCE_ENABLE =
   getExpoPublicEnv('EXPO_PUBLIC_ENABLE_REVENUECAT') === 'true';
 const ENABLE_REVENUECAT =
   FORCE_ENABLE || (Platform.OS !== 'web' && APP_OWNERSHIP !== 'expo');
+const REQUIRE_RC_APP_USER_ID =
+  getExpoPublicEnv('EXPO_PUBLIC_REQUIRE_REVENUECAT_USER_ID') !== 'false';
 const CAN_USE_NATIVE_PAYWALL =
   Platform.OS !== 'web' && APP_OWNERSHIP !== 'expo';
 const RC_IOS_API_KEY = getExpoPublicEnv(
@@ -47,6 +49,8 @@ let purchasesConfigured = false;
 let didConfigure = false;
 let initPromise: Promise<boolean> | null = null;
 let runtimeReadyPromise: Promise<void> | null = null;
+let customLogHandlerInstalled = false;
+let activeRevenueCatAppUserId: string | null = null;
 
 const PAYWALL_ABANDON_OPENED_AT_KEY = 'paywallAbandonOpenedAtMs';
 const PAYWALL_ABANDON_CANDIDATE_AT_KEY = 'paywallAbandonCandidateAtMs';
@@ -65,6 +69,9 @@ const POST_PURCHASE_BLOCKERS_REMINDER_ID_30M_KEY =
   'postPurchaseBlockersReminderNotificationId30m';
 const POST_PURCHASE_BLOCKERS_REMINDER_URL =
   'sobre://blocking-settings?source=post-purchase-reminder';
+const RC_DEVICE_IDENTIFIERS_SYNCED_KEY =
+  'revenueCatDeviceIdentifiersSynced';
+const RC_FB_ANON_ID_SYNCED_KEY = 'revenueCatFbAnonIdSynced';
 
 let paywallOpenedAtMs: number | null = null;
 let paywallCandidateAtMs: number | null = null;
@@ -419,6 +426,52 @@ function getExpectedApiKeyPrefixes(): string[] {
   }
 }
 
+function installCustomRevenueCatLogHandler() {
+  if (customLogHandlerInstalled || typeof Purchases?.setLogHandler !== 'function') {
+    return;
+  }
+
+  try {
+    Purchases.setLogHandler((level, message) => {
+      const rendered = `[RevenueCat] ${message}`;
+      const normalizedMessage =
+        typeof message === 'string' ? message.toLowerCase() : '';
+      const isNonBlockingSubscriberAttributesLog =
+        normalizedMessage.includes('subscriber attributes') ||
+        normalizedMessage.includes('$idfv') ||
+        normalizedMessage.includes('$fbanonid') ||
+        normalizedMessage.includes('immutable');
+
+      if (isNonBlockingSubscriberAttributesLog) {
+        console.warn(`${rendered} (non-blocking)`);
+        return;
+      }
+
+      switch (level) {
+        case Purchases.LOG_LEVEL.DEBUG:
+          console.debug(rendered);
+          break;
+        case Purchases.LOG_LEVEL.INFO:
+          console.info(rendered);
+          break;
+        case Purchases.LOG_LEVEL.WARN:
+          console.warn(rendered);
+          break;
+        case Purchases.LOG_LEVEL.ERROR:
+          console.error(rendered);
+          break;
+        default:
+          console.log(rendered);
+          break;
+      }
+    });
+
+    customLogHandlerInstalled = true;
+  } catch (error) {
+    console.warn('[RevenueCat] setLogHandler failed', error);
+  }
+}
+
 async function ensurePurchasesConfigured() {
   if (!ENABLE_REVENUECAT) {
     return false;
@@ -439,6 +492,81 @@ export function isRevenueCatEnabled() {
   return ENABLE_REVENUECAT;
 }
 
+export function isRevenueCatConfigured() {
+  return purchasesConfigured;
+}
+
+export function getRevenueCatAppUserId() {
+  return activeRevenueCatAppUserId;
+}
+
+export function setRevenueCatAppUserId(userId?: string | null) {
+  activeRevenueCatAppUserId = String(userId || '').trim() || null;
+}
+
+async function markRevenueCatAttributeSynced(storageKey: string) {
+  await AsyncStorage.setItem(storageKey, '1');
+}
+
+async function hasRevenueCatAttributeBeenSynced(storageKey: string) {
+  return (await AsyncStorage.getItem(storageKey)) === '1';
+}
+
+function shouldTreatRevenueCatAttributeErrorAsSynced(error: unknown) {
+  const message = String((error as any)?.message || '').toLowerCase();
+  return (
+    message.includes('immutable') ||
+    message.includes('$idfv') ||
+    message.includes('$fbanonid') ||
+    message.includes('subscriber attributes')
+  );
+}
+
+async function syncRevenueCatStaticSubscriberAttributesOnce() {
+  if (await hasRevenueCatAttributeBeenSynced(RC_DEVICE_IDENTIFIERS_SYNCED_KEY)) {
+    if (__DEV__) {
+      console.log('[RevenueCat] collectDeviceIdentifiers skipped (already sent)');
+    }
+  } else {
+    try {
+      await Purchases.collectDeviceIdentifiers();
+      await markRevenueCatAttributeSynced(RC_DEVICE_IDENTIFIERS_SYNCED_KEY);
+      console.log('[RevenueCat] collectDeviceIdentifiers ok');
+    } catch (error) {
+      if (shouldTreatRevenueCatAttributeErrorAsSynced(error)) {
+        await markRevenueCatAttributeSynced(RC_DEVICE_IDENTIFIERS_SYNCED_KEY);
+      }
+      console.warn('[RevenueCat] collectDeviceIdentifiers failed', error);
+    }
+  }
+
+  if (await hasRevenueCatAttributeBeenSynced(RC_FB_ANON_ID_SYNCED_KEY)) {
+    if (__DEV__) {
+      console.log('[RevenueCat] setFBAnonymousID skipped (already sent)');
+    }
+    return;
+  }
+
+  try {
+    const fbAnonId = await AppEventsLogger.getAnonymousID();
+    if (!fbAnonId) {
+      return;
+    }
+
+    await Purchases.setFBAnonymousID(fbAnonId);
+    await markRevenueCatAttributeSynced(RC_FB_ANON_ID_SYNCED_KEY);
+    console.log(
+      '[RevenueCat] setFBAnonymousID ok',
+      fbAnonId.slice(0, 8) + '...',
+    );
+  } catch (error) {
+    if (shouldTreatRevenueCatAttributeErrorAsSynced(error)) {
+      await markRevenueCatAttributeSynced(RC_FB_ANON_ID_SYNCED_KEY);
+    }
+    console.warn('[RevenueCat] setFBAnonymousID failed', error);
+  }
+}
+
 // 👇 Remplace par l'ID EXACT de ton entitlement dans RC (ex: "Accès à SOBRE." s'il n'y a pas d'ID technique)
 export const ENTITLEMENT_ID = 'Accès à SOBRE.';
 
@@ -454,6 +582,14 @@ export async function initRevenueCat(userId?: string): Promise<boolean> {
     return false;
   }
 
+  const canonicalUserId = String(userId || '').trim();
+  if (REQUIRE_RC_APP_USER_ID && !canonicalUserId) {
+    console.warn(
+      '[RevenueCat] Missing canonical userId. Refusing anonymous configure.',
+    );
+    return false;
+  }
+
   if (await ensurePurchasesConfigured()) {
     return true;
   }
@@ -466,6 +602,7 @@ export async function initRevenueCat(userId?: string): Promise<boolean> {
   if (!apiKey) {
     return false;
   }
+  installCustomRevenueCatLogHandler();
 
   initPromise = (async () => {
     try {
@@ -496,35 +633,21 @@ export async function initRevenueCat(userId?: string): Promise<boolean> {
 
       await Purchases.configure({
         apiKey,
-        appUserID: userId,
+        appUserID: canonicalUserId || undefined,
       });
       purchasesConfigured = true;
       didConfigure = true;
+      activeRevenueCatAppUserId = canonicalUserId || null;
       console.log('[RevenueCat] configure ok');
+
+      if (!canonicalUserId) {
+        console.log('[RevenueCat] skipping subscriber attributes sync (no confirmed app user id)');
+        return true;
+      }
 
       // Bridge device identifiers so RevenueCat can share attribution
       // data with Meta (IDFA when ATT granted, IDFV always).
-      try {
-        Purchases.collectDeviceIdentifiers();
-        console.log('[RevenueCat] collectDeviceIdentifiers ok');
-      } catch (idErr) {
-        console.warn('[RevenueCat] collectDeviceIdentifiers failed', idErr);
-      }
-
-      // Forward the Facebook Anonymous ID to RevenueCat so it can match
-      // RevenueCat subscribers to Meta ad installs.
-      try {
-        const fbAnonId = await AppEventsLogger.getAnonymousID();
-        if (fbAnonId) {
-          Purchases.setFBAnonymousID(fbAnonId);
-          console.log(
-            '[RevenueCat] setFBAnonymousID ok',
-            fbAnonId.slice(0, 8) + '…',
-          );
-        }
-      } catch (fbErr) {
-        console.warn('[RevenueCat] setFBAnonymousID failed', fbErr);
-      }
+      await syncRevenueCatStaticSubscriberAttributesOnce();
 
       return true;
     } catch (error) {
@@ -557,8 +680,7 @@ export function onCustomerInfoChange(
   }
 
   try {
-    // Renvoie l'unsubscribe
-    return Purchases.addCustomerInfoUpdateListener((info) => {
+    const listener = (info: CustomerInfo) => {
       logCustomerInfo('listener', info);
       const hasAccess = Boolean(info.entitlements?.active?.[ENTITLEMENT_ID]);
 
@@ -591,7 +713,12 @@ export function onCustomerInfoChange(
       }
 
       cb(hasAccess, info);
-    });
+    };
+
+    Purchases.addCustomerInfoUpdateListener(listener);
+    return () => {
+      Purchases.removeCustomerInfoUpdateListener(listener);
+    };
   } catch (error) {
     console.error('RevenueCat customer info listener error:', error);
     return () => {}; // Return empty unsubscribe function

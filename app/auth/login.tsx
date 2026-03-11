@@ -1,90 +1,72 @@
-﻿import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ScrollView, Platform } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ScrollView, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
-import { Mail, Lock, Eye, EyeOff, Apple } from 'lucide-react-native';
-import * as AppleAuthentication from 'expo-apple-authentication';
-import { Image } from 'react-native';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { Mail } from 'lucide-react-native';
 
 import { useAuth } from '@/hooks/useAuth';
-import { signInWithApple } from '@/lib/auth/supabaseAuth';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [appleLoading, setAppleLoading] = useState(false);
-  const [appleAvailable, setAppleAvailable] = useState(false);
-  const { signIn, requestPasswordReset } = useAuth();
+  const [showNoPremiumMessage, setShowNoPremiumMessage] = useState(false);
+  const { showNoPremium, expectedAppUserId } = useLocalSearchParams<{
+    showNoPremium?: string;
+    expectedAppUserId?: string;
+  }>();
+  const { user, requestMagicLinkSignIn } = useAuth();
 
   useEffect(() => {
-    let isMounted = true;
-    (async () => {
-      try {
-        const available = await AppleAuthentication.isAvailableAsync();
-        if (isMounted) {
-          setAppleAvailable(available);
-        }
-      } catch (error) {
-        console.error('Apple availability check failed', error);
-        if (isMounted) {
-          setAppleAvailable(false);
-        }
-      }
-    })();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+    if (showNoPremium === '1') {
+      setShowNoPremiumMessage(true);
+      router.replace('/auth/login');
+    }
+  }, [showNoPremium]);
 
-  const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert('Erreur', 'Veuillez remplir tous les champs');
+  useFocusEffect(
+    React.useCallback(() => {
+      return () => {
+        setShowNoPremiumMessage(false);
+      };
+    }, []),
+  );
+
+  const handleContinue = async () => {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedEmail) {
+      Alert.alert('Erreur', 'Veuillez renseigner votre adresse email.');
       return;
     }
 
+    if (!/\S+@\S+\.\S+/.test(normalizedEmail)) {
+      Alert.alert('Erreur', 'Veuillez saisir une adresse email valide.');
+      return;
+    }
+
+    setShowNoPremiumMessage(false);
     setLoading(true);
-    const { error } = await signIn(email, password);
+    const expectedUserIdFromRoute =
+      typeof expectedAppUserId === 'string' ? expectedAppUserId.trim() : '';
+    const expectedUserIdFromSession =
+      user?.email?.toLowerCase() === normalizedEmail ? user?.uid ?? null : null;
+    const expectedUserId =
+      expectedUserIdFromRoute.length > 0 ? expectedUserIdFromRoute : expectedUserIdFromSession;
+
+    const { error } = await requestMagicLinkSignIn(normalizedEmail, {
+      expectedAppUserId: expectedUserId,
+    });
     setLoading(false);
 
     if (error) {
-      Alert.alert('Erreur de connexion', error);
-    } else {
-      router.replace('/(tabs)');
+      Alert.alert('Lien de connexion', error);
+      return;
     }
-  };
 
-  const handleForgotPassword = async () => {
-    const { error } = await requestPasswordReset(email);
-
-    if (error) {
-      Alert.alert('Erreur', error);
-    } else {
-      Alert.alert(
-        'Email envoyé',
-        'Un email de réinitialisation vient de vous être adressé. Vérifiez votre boîte de réception (et vos spams).'
-      );
-    }
-  };
-
-  const handleAppleLogin = async () => {
-    if (appleLoading) return;
-    setAppleLoading(true);
-    try {
-      const { error } = await signInWithApple();
-
-      if (error) {
-        throw new Error(error);
-      }
-
-      router.replace('/(tabs)');
-    } catch (error) {
-      console.error('Apple sign-in failed', error);
-      Alert.alert('Connexion Apple', 'Une erreur est survenue lors de la connexion avec Apple.');
-    } finally {
-      setAppleLoading(false);
-    }
+    Alert.alert(
+      'Email envoye',
+      "Un lien de connexion vient d'etre envoye. Ouvrez cet email sur ce telephone pour finaliser la connexion.",
+    );
   };
 
   return (
@@ -96,8 +78,18 @@ export default function LoginScreen() {
             style={styles.logoImage}
             resizeMode="contain"
           />
-          <Text style={styles.title}>Bon retour !</Text>
-          <Text style={styles.subtitle}>Connectez-vous à votre compte</Text>
+          <Text style={styles.title}>Se connecter</Text>
+          {showNoPremiumMessage ? (
+            <View style={styles.noticeBox}>
+              <Text style={styles.noticeTitle}>{'Aucun acc\u00e8s premium trouv\u00e9 \u26A1'}</Text>
+              <Text style={styles.noticeText}>
+                Cet email n&apos;a pas d&apos;abonnement actif associ\u00e9.
+              </Text>
+            </View>
+          ) : null}
+          <Text style={styles.subtitle}>
+            Entrez l'email utilise lors du paiement. Nous vous enverrons un lien magique.
+          </Text>
         </View>
 
         <View style={styles.form}>
@@ -111,63 +103,30 @@ export default function LoginScreen() {
               onChangeText={setEmail}
               keyboardType="email-address"
               autoCapitalize="none"
-              returnKeyType="next"
-            />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Lock size={20} color="#A3A3A3" />
-            <TextInput
-              style={styles.input}
-              placeholder="Mot de passe"
-              placeholderTextColor="#666666"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
+              autoCorrect={false}
               returnKeyType="done"
-              onSubmitEditing={handleLogin}
+              onSubmitEditing={handleContinue}
             />
-            <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-              {showPassword ? <EyeOff size={20} color="#A3A3A3" /> : <Eye size={20} color="#A3A3A3" />}
-            </TouchableOpacity>
           </View>
 
           <TouchableOpacity
             style={[styles.loginButton, loading && styles.loginButtonDisabled]}
-            onPress={handleLogin}
+            onPress={handleContinue}
             disabled={loading}
           >
-            <Text style={styles.loginButtonText}>{loading ? 'Connexion...' : 'Se connecter'}</Text>
+            <Text style={styles.loginButtonText}>{loading ? 'Envoi...' : 'Continuer'}</Text>
           </TouchableOpacity>
 
-          <Text style={styles.migrationNotice}>
-            Suite à une mise à jour, la création d'un compte est nécessaire.
-            {'\n'}
-            Vos progrès sont conservés et votre abonnement premium sera restauré automatiquement.
+          <Text style={styles.helperText}>
+            Aucun mot de passe requis. Le lien ouvre directement votre session.
           </Text>
-
-          <TouchableOpacity style={styles.forgotPassword} onPress={handleForgotPassword}>
-            <Text style={styles.forgotPasswordText}>Mot de passe oublié ?</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.divider}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>ou</Text>
-          <View style={styles.dividerLine} />
         </View>
 
         <View style={styles.footer}>
-          <Text style={styles.footerText}>Pas encore de compte ?</Text>
+          <Text style={styles.footerText}>Besoin d'un compte classique ?</Text>
           <TouchableOpacity onPress={() => router.push('/auth/signup')}>
             <Text style={styles.footerLink}>S'inscrire</Text>
           </TouchableOpacity>
-        </View>
-
-        <View style={styles.welcomeContainer}>
-          <Text style={styles.welcomeText}>
-            Reprendre le contrôle de sa vie commence par une décision. Vous avez déjà fait le plus difficile.
-          </Text>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -186,18 +145,11 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginBottom: 48,
+    marginBottom: 44,
   },
   logoImage: {
     width: 140,
     height: 46,
-    marginBottom: 32,
-  },
-  logo: {
-    fontSize: 32,
-    fontFamily: 'Inter-Bold',
-    color: '#FFD700',
-    letterSpacing: 4,
     marginBottom: 32,
   },
   title: {
@@ -207,6 +159,31 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     textAlign: 'center',
   },
+  noticeBox: {
+    width: '100%',
+    backgroundColor: '#171717',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#FFD700',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginTop: 12,
+    marginBottom: 18,
+  },
+  noticeTitle: {
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    color: '#FFD700',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  noticeText: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#E5E5E5',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
   subtitle: {
     fontSize: 16,
     fontFamily: 'Inter-Regular',
@@ -215,8 +192,8 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   form: {
-    gap: 20,
-    marginBottom: 32,
+    gap: 18,
+    marginBottom: 24,
   },
   inputContainer: {
     flexDirection: 'row',
@@ -240,7 +217,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingVertical: 18,
     alignItems: 'center',
-    marginTop: 12,
+    marginTop: 4,
     shadowColor: '#FFD700',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
@@ -256,95 +233,28 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     color: '#000000',
   },
-  appleButton: {
-    marginTop: 12,
-    backgroundColor: '#0A0A0A',
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 10,
-    borderWidth: 1,
-    borderColor: '#1C1C1C',
-    height: 48,
-    width: '100%',
-  },
-  appleButtonDisabled: {
-    opacity: 0.7,
-  },
-  appleButtonText: {
-    fontSize: 16,
-    fontFamily: 'Inter-SemiBold',
-    color: '#FFFFFF',
-  },
-  migrationNotice: {
-    marginTop: 10,
-    marginBottom: 6,
+  helperText: {
+    marginTop: 8,
     fontSize: 13,
     fontFamily: 'Inter-Regular',
-    color: '#E5E5E5',
-    opacity: 0.7,
+    color: '#A3A3A3',
     textAlign: 'center',
     lineHeight: 18,
-  },
-  forgotPassword: {
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  forgotPasswordText: {
-    fontSize: 14,
-    fontFamily: 'Inter-Medium',
-    color: '#A3A3A3',
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 24,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#333333',
-  },
-  dividerText: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#666666',
-    paddingHorizontal: 16,
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 32,
+    gap: 6,
   },
   footerText: {
-    fontSize: 16,
+    fontSize: 14,
     fontFamily: 'Inter-Regular',
     color: '#A3A3A3',
   },
   footerLink: {
-    fontSize: 16,
+    fontSize: 14,
     fontFamily: 'Inter-SemiBold',
     color: '#FFD700',
   },
-  welcomeContainer: {
-    padding: 20,
-    backgroundColor: '#1A1A1A',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#333333',
-  },
-  welcomeText: {
-    fontSize: 16,
-    fontFamily: 'Inter-Medium',
-    color: '#F5F5F5',
-    textAlign: 'center',
-    fontStyle: 'italic',
-    lineHeight: 24,
-  },
 });
-

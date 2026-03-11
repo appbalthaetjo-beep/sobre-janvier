@@ -15,6 +15,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useHaptics } from '@/hooks/useHaptics';
+import { useAuth } from '@/hooks/useAuth';
+import { linkRevenueCatUser } from '@/lib/auth/revenuecatAuth';
 import { logMetaCompleteRegistration } from '@/src/lib/metaConversionEvents';
 import { trackOnboardingScreen } from '@/src/lib/posthog';
 import {
@@ -34,6 +36,7 @@ const PAYWALL_ONBOARDING_CONTEXT = {
 
 export default function TrialReminderScreen() {
   const { triggerTap } = useHaptics();
+  const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
 
   const handleBack = () => {
@@ -79,8 +82,19 @@ export default function TrialReminderScreen() {
       await ensureSobrietyData();
 
       if (isRevenueCatEnabled()) {
+        const canonicalUserId = String(user?.uid || '').trim();
+        if (!canonicalUserId) {
+          Alert.alert(
+            'Compte requis',
+            'Connecte-toi ou crée ton compte avant de lancer l’abonnement.',
+          );
+          router.replace('/auth/signup');
+          return;
+        }
+
         try {
-          await initRevenueCat();
+          await initRevenueCat(canonicalUserId);
+          await linkRevenueCatUser(canonicalUserId, 'onboarding_trial_reminder');
         } catch (error) {
           console.warn('RevenueCat init failed before paywall', error);
         }

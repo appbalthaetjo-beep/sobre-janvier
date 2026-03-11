@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Stack, usePathname, router } from 'expo-router';
+import { Stack, useGlobalSearchParams, usePathname, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { useMetaAppEvents } from '@/hooks/useMetaAppEvents';
@@ -9,7 +9,8 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useAuth } from '@/hooks/useAuth';
 import { useRevenueCat } from '@/hooks/useRevenueCat';
 import SplashScreenComponent from '@/components/SplashScreen';
-import { AppState, Linking, Platform, View } from 'react-native';
+import SimplePaywallSystem from '@/components/SimplePaywallSystem';
+import { ActivityIndicator, AppState, Linking, Platform, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import GlobalErrorBoundary from '@/components/GlobalErrorBoundary';
 import FeedbackModalHost from '@/components/FeedbackModalHost';
@@ -79,6 +80,62 @@ if (WELCOME_STEP) {
   ONBOARDING_STEP_MAP['/onboarding/'] = WELCOME_STEP;
 }
 
+const FREE_ROUTE_PREFIXES = [
+  '/auth',
+  '/onboarding',
+  '/no-premium',
+  '/paywall',
+  '/privacy-policy',
+  '/terms-of-service',
+  '/debug',
+  '/+not-found',
+];
+
+const PREMIUM_ROUTE_PREFIXES = [
+  '/(tabs)',
+  '/ai-therapist',
+  '/blocking',
+  '/blocking-settings',
+  '/challenges',
+  '/commitment',
+  '/daily-checkin',
+  '/daily-reset',
+  '/daily-reset-settings',
+  '/edit-blacklist',
+  '/emergency',
+  '/journal',
+  '/journal-history',
+  '/lesson-detail',
+  '/meditation',
+  '/milestone-detail',
+  '/night-mode-settings',
+  '/pause-mode',
+  '/profile',
+  '/reasons',
+  '/add-reason',
+  '/reflect-reason',
+  '/relapse',
+  '/safe-browser',
+  '/settings',
+  '/site-blocking',
+  '/stay-sober',
+  '/unlock',
+  '/web-blocking-guide',
+];
+
+function normalizeRoutePath(path?: string | null) {
+  if (!path) {
+    return '/';
+  }
+
+  const normalized = path.replace(/\/+$/, '');
+  return normalized || '/';
+}
+
+function matchesRoutePrefix(path: string, prefix: string) {
+  return path === prefix || path.startsWith(`${prefix}/`);
+}
+
 SplashScreen.preventAutoHideAsync();
 
 function RootLayoutInner() {
@@ -143,11 +200,20 @@ function RootLayoutInner() {
     };
   }, []);
   const pathname = usePathname();
+  const globalSearchParams = useGlobalSearchParams<{
+    code?: string;
+    access_token?: string;
+    refresh_token?: string;
+    token_hash?: string;
+    type?: string;
+  }>();
   const { user, loading } = useAuth();
-  const { isLoading: rcLoading } = useRevenueCat();
+  const { hasAccess, isLoading: rcLoading } = useRevenueCat(user?.uid ?? null);
   const [showSplash, setShowSplash] = useState(true);
   const [pendingOnboarding, setPendingOnboarding] = useState<boolean | null>(null);
   const sobrietyCompatDidInitRef = useRef(false);
+  const sawMagicLinkCallbackRef = useRef(false);
+  const lastNoPremiumMessageUserRef = useRef<string | null>(null);
 
   const [fontsLoaded, fontError] = useFonts({
     'Inter-Regular': Inter_400Regular,
@@ -312,6 +378,31 @@ function RootLayoutInner() {
   }, []);
 
   useEffect(() => {
+    const hasMagicLinkCallbackParams =
+      typeof globalSearchParams.code === 'string' ||
+      typeof globalSearchParams.access_token === 'string' ||
+      typeof globalSearchParams.refresh_token === 'string' ||
+      typeof globalSearchParams.token_hash === 'string' ||
+      globalSearchParams.type === 'magiclink';
+
+    if (hasMagicLinkCallbackParams) {
+      sawMagicLinkCallbackRef.current = true;
+    }
+  }, [
+    globalSearchParams.access_token,
+    globalSearchParams.code,
+    globalSearchParams.refresh_token,
+    globalSearchParams.token_hash,
+    globalSearchParams.type,
+  ]);
+
+  useEffect(() => {
+    if (!user) {
+      lastNoPremiumMessageUserRef.current = null;
+    }
+  }, [user]);
+
+  useEffect(() => {
     if (sobrietyCompatDidInitRef.current) {
       return;
     }
@@ -347,6 +438,32 @@ function RootLayoutInner() {
   const isInOnboarding = pathname?.startsWith('/onboarding') ?? false;
   const isInTabs = pathname?.startsWith('/(tabs)') ?? false;
   const isInAuth = pathname?.startsWith('/auth') ?? false;
+  const isInNoPremium = pathname?.startsWith('/no-premium') ?? false;
+  const normalizedPathname = normalizeRoutePath(pathname);
+  const shouldHoldResolvedBoot = loading || (Boolean(user?.uid) && rcLoading);
+  const shouldRouteFreeUserToWelcome =
+    Boolean(user) &&
+    !loading &&
+    !rcLoading &&
+    !shouldShowOnboarding &&
+    !hasAccess;
+  const isFreeRoute = FREE_ROUTE_PREFIXES.some((prefix) =>
+    matchesRoutePrefix(normalizedPathname, prefix),
+  );
+  const isPremiumRoute =
+    PREMIUM_ROUTE_PREFIXES.some((prefix) =>
+      matchesRoutePrefix(normalizedPathname, prefix),
+    ) || !isFreeRoute;
+  const shouldEnforcePremiumGuard =
+    Boolean(user) &&
+    !loading &&
+    !rcLoading &&
+    !shouldShowOnboarding &&
+    !isInAuth &&
+    !isInOnboarding &&
+    !isInNoPremium &&
+    isPremiumRoute &&
+    !isFreeRoute;
 
   useEffect(() => {
     if (!pathname) {
@@ -392,22 +509,87 @@ function RootLayoutInner() {
       return;
     }
 
+    const shouldShowNoPremiumAfterMagicLink =
+      Boolean(user) &&
+      !hasAccess &&
+      sawMagicLinkCallbackRef.current &&
+      lastNoPremiumMessageUserRef.current !== user?.uid;
+
+    if (shouldShowNoPremiumAfterMagicLink) {
+      sawMagicLinkCallbackRef.current = false;
+      lastNoPremiumMessageUserRef.current = user?.uid ?? null;
+      void recordNavigationEvent({
+        path: '/auth/login',
+        action: 'redirect_no_premium_to_login_message',
+        meta: { previousPath: pathname ?? '(unknown)' },
+      });
+      router.replace('/auth/login?showNoPremium=1');
+      return;
+    }
+
     if (shouldShowOnboarding) {
-      if (!isInOnboarding && !isInAuth) {
+      const shouldStayOnAuthWhileLoggedOut = !user && isInAuth;
+      if (!isInOnboarding && !shouldStayOnAuthWhileLoggedOut) {
         void recordNavigationEvent({ path: '/onboarding', action: 'redirect_needs_onboarding', meta: { previousPath: pathname ?? '(unknown)' } });
         router.replace('/onboarding');
       }
       return;
     }
 
-    if (isInOnboarding) {
+    if (shouldRouteFreeUserToWelcome) {
+      if (!isInOnboarding && !isInAuth) {
+        void recordNavigationEvent({
+          path: '/onboarding',
+          action: 'redirect_free_user_to_welcome',
+          meta: { previousPath: pathname ?? '(unknown)' },
+        });
+        router.replace('/onboarding');
+      }
+      return;
+    }
+
+    if (user && hasAccess && isInNoPremium) {
+      void recordNavigationEvent({
+        path: '/(tabs)',
+        action: 'redirect_premium_away_from_no_premium',
+        meta: { previousPath: pathname ?? '(unknown)' },
+      });
+      router.replace('/(tabs)');
+      return;
+    }
+
+    if (user && hasAccess && isInAuth) {
+      void recordNavigationEvent({
+        path: '/(tabs)',
+        action: 'redirect_authenticated_from_auth',
+        meta: { previousPath: pathname ?? '(unknown)' },
+      });
+      router.replace('/(tabs)');
+      return;
+    }
+
+    if (isInOnboarding && hasAccess) {
       void recordNavigationEvent({ path: '/(tabs)', action: 'exit_onboarding', meta: { previousPath: pathname ?? '(unknown)' } });
       router.replace('/(tabs)');
       return;
     }
 
     // Plus de redirection globale : on laisse les �crans modaux vivre leur vie.
-  }, [loading, rcLoading, fontsLoaded, showSplash, shouldShowOnboarding, pathname, isInOnboarding, isInTabs, isInAuth]);
+  }, [
+    loading,
+    rcLoading,
+    hasAccess,
+    fontsLoaded,
+    showSplash,
+    shouldShowOnboarding,
+    shouldRouteFreeUserToWelcome,
+    pathname,
+    isInOnboarding,
+    isInNoPremium,
+    isInTabs,
+    isInAuth,
+    user,
+  ]);
 
   if (!fontsLoaded && !fontError) {
     return null;
@@ -421,6 +603,14 @@ function RootLayoutInner() {
     );
   }
 
+  if (shouldHoldResolvedBoot) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#000000', alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" color="#FFFFFF" />
+      </View>
+    );
+  }
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <GlobalErrorBoundary onReset={() => router.replace('/(tabs)') }>
@@ -428,6 +618,7 @@ function RootLayoutInner() {
           <Stack initialRouteName="(tabs)" screenOptions={{ headerShown: false }}>
             <Stack.Screen name="auth/login" />
             <Stack.Screen name="auth/signup" />
+            <Stack.Screen name="no-premium" />
             <Stack.Screen name="onboarding/index" />
             <Stack.Screen name="onboarding/story" />
             <Stack.Screen name="onboarding/personal-data" />
@@ -501,6 +692,7 @@ function RootLayoutInner() {
             <Stack.Screen name="debug/billing" />
             <Stack.Screen name="+not-found" />
           </Stack>
+          <SimplePaywallSystem enforce={shouldEnforcePremiumGuard} />
           <FeedbackModalHost />
           <StatusBar style="auto" />
         </View>

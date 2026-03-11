@@ -1,12 +1,14 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useHaptics } from '@/hooks/useHaptics';
 import { LinearGradient } from 'expo-linear-gradient';
 
 export default function OnboardingIntro() {
   const { triggerTap } = useHaptics();
+  const { reason } = useLocalSearchParams<{ reason?: string }>();
+  const showNoPremiumMessage = reason === 'no-premium';
 
   const handleStartQuiz = () => {
     triggerTap('medium');
@@ -29,6 +31,12 @@ export default function OnboardingIntro() {
 
         {/* Sous-texte */}
         <View style={styles.messageSection}>
+          {showNoPremiumMessage ? (
+            <View style={styles.warningBox}>
+              <Text style={styles.warningTitle}>Aucun accès premium trouvé ⚡</Text>
+              <Text style={styles.warningText}>Commence par le diagnostic pour démarrer.</Text>
+            </View>
+          ) : null}
           <Text style={styles.subtitle}>
             Commençons par déterminer si vous avez un problème avec la pornographie.
           </Text>
@@ -95,6 +103,31 @@ const styles = StyleSheet.create({
   },
   messageSection: {
     marginBottom: 80,
+    width: '100%',
+  },
+  warningBox: {
+    width: '100%',
+    backgroundColor: '#1A1A1A',
+    borderWidth: 1,
+    borderColor: '#FFD700',
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    marginBottom: 18,
+  },
+  warningTitle: {
+    color: '#FFD700',
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  warningText: {
+    color: '#EDEDED',
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    textAlign: 'center',
+    lineHeight: 20,
   },
   subtitle: {
     fontSize: 18,

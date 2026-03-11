@@ -25,7 +25,10 @@
       "distribution": "internal",
       "channel": "preview",
       "env": {
-        "APP_ENV": "preview"
+        "APP_ENV": "preview",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://sneraqviwnxgquczofuv.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_hrX23-GR0z-JFVa4aKLglA_xx6A7f21",
+        "EXPO_PUBLIC_USE_SUPABASE_AUTH": "true"
       },
       "ios": {
         "credentialsSource": "remote"
@@ -37,6 +40,9 @@
       "channel": "production",
       "env": {
         "APP_ENV": "production",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://sneraqviwnxgquczofuv.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_hrX23-GR0z-JFVa4aKLglA_xx6A7f21",
+        "EXPO_PUBLIC_USE_SUPABASE_AUTH": "true",
         "EXPO_PUBLIC_ENABLE_REVENUECAT": "true",
         "EXPO_PUBLIC_REVENUECAT_IOS_API_KEY": "appl_ioXWuFmGAbRJpPlSOxKRmUvHCcb",
         "EXPO_PUBLIC_REVENUECAT_API_KEY": "appl_ioXWuFmGAbRJpPlSOxKRmUvHCcb"

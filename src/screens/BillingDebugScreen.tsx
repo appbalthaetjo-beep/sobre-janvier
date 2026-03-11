@@ -1,24 +1,27 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Purchases from 'react-native-purchases';
-import { showPromoPaywall, showDefaultPaywall, restorePurchases, openManageSubscription } from '../lib/revenuecat';
+import { useAuth } from '@/hooks/useAuth';
+import { initRevenueCat, showPromoPaywall, showDefaultPaywall, restorePurchases, openManageSubscription } from '../lib/revenuecat';
 import { promoEvents } from '../lib/analytics';
 
 export default function BillingDebugScreen() {
+  const { user } = useAuth();
   const [info, setInfo] = useState<any>(null);
   const [annual, setAnnual] = useState<any>(null);
   const [monthly, setMonthly] = useState<any>(null);
   const [offerings, setOfferings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadBillingInfo();
-  }, []);
-
-  const loadBillingInfo = async () => {
+  const loadBillingInfo = useCallback(async () => {
     try {
       setLoading(true);
+      const canonicalUserId = String(user?.uid || '').trim();
+      const ready = await initRevenueCat(canonicalUserId);
+      if (!ready) {
+        throw new Error('RevenueCat not configured for current user');
+      }
       
       // Vérifier si RevenueCat est activé
       const offeringsData = await Purchases.getOfferings();
@@ -50,7 +53,11 @@ export default function BillingDebugScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.uid]);
+
+  useEffect(() => {
+    void loadBillingInfo();
+  }, [loadBillingInfo]);
 
   const handlePromoPaywall = async () => {
     try {
@@ -296,3 +303,4 @@ const styles = StyleSheet.create({
 });
 
 ""
+

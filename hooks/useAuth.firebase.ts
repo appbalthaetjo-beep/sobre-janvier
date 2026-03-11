@@ -9,6 +9,7 @@ import {
 } from 'firebase/auth';
 
 import { auth, authReady } from '@/lib/firebase';
+import { linkRevenueCatUser, unlinkRevenueCatUser } from '@/lib/auth/revenuecatAuth';
 import { setShouldShowOnboardingFlag } from '@/utils/onboardingFlag';
 import { firebaseConfig } from '@/config/firebase.config';
 import { identifyPostHogUser } from '../lib/posthog';
@@ -29,6 +30,11 @@ export function useFirebaseAuth() {
     let isMounted = true;
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
+      if (currentUser?.uid) {
+        void linkRevenueCatUser(currentUser.uid, 'firebase_auth_state_change');
+      } else {
+        void unlinkRevenueCatUser('firebase_auth_state_change');
+      }
       if (currentUser) {
         setLoading(false);
         return;

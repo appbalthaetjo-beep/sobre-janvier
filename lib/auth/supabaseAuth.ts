@@ -1,14 +1,21 @@
-import type { User } from '@supabase/supabase-js';
+import type { EmailOtpType, User } from '@supabase/supabase-js';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Linking from 'expo-linking';
 
 import { SUPABASE_DEBUG, probeSupabaseAuthConnectivity, supabase } from '@/lib/supabase';
-import { linkRevenueCatUser, unlinkRevenueCatUser } from '@/lib/auth/revenuecatAuth';
+import { linkRevenueCatUser } from '@/lib/auth/revenuecatAuth';
 import { ensureSupabaseProfile } from '@/utils/publicUser';
 
 type AuthResult = { user: User | null; error: string | null };
 type SignOutResult = { error: string | null };
 type PasswordResetResult = { error: string | null };
+type MagicLinkResult = { error: string | null };
+type DeepLinkAuthResult = {
+  handled: boolean;
+  sessionEstablished: boolean;
+  error: string | null;
+};
+const DEFAULT_MAGIC_LINK_REDIRECT_URL = 'sobre://auth/login';
 
 function toFrenchAuthErrorMessage(error: unknown, fallback: string) {
   const message = (error as any)?.message as string | undefined;
@@ -40,6 +47,88 @@ function toFrenchAuthErrorMessage(error: unknown, fallback: string) {
 
 function getDefaultRedirectUrl() {
   return Linking.createURL('auth/login');
+}
+
+function appendSearchParams(container: URLSearchParams, raw: string) {
+  if (!raw) {
+    return;
+  }
+
+  const normalized = raw.startsWith('?') || raw.startsWith('#') ? raw.slice(1) : raw;
+  const segment = normalized.split('?').pop() ?? normalized;
+  const incoming = new URLSearchParams(segment);
+  incoming.forEach((value, key) => {
+    container.set(key, value);
+  });
+}
+
+function parseAuthParamsFromUrl(url: string) {
+  const params = new URLSearchParams();
+
+  try {
+    const parsed = Linking.parse(url);
+    const queryParams = parsed.queryParams ?? {};
+
+    Object.entries(queryParams).forEach(([key, value]) => {
+      if (typeof value === 'string') {
+        params.set(key, value);
+      }
+    });
+  } catch {
+    // Ignore parser errors and fallback to manual extraction below.
+  }
+
+  const queryIndex = url.indexOf('?');
+  if (queryIndex >= 0) {
+    const hashIndex = url.indexOf('#', queryIndex);
+    const queryPart = hashIndex >= 0 ? url.slice(queryIndex + 1, hashIndex) : url.slice(queryIndex + 1);
+    appendSearchParams(params, queryPart);
+  }
+
+  const hashIndex = url.indexOf('#');
+  if (hashIndex >= 0) {
+    appendSearchParams(params, url.slice(hashIndex + 1));
+  }
+
+  return params;
+}
+
+function maskToken(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  if (value.length <= 12) {
+    return value;
+  }
+
+  return `${value.slice(0, 6)}...${value.slice(-4)}`;
+}
+
+function logDeepLinkDebug(step: string, meta?: Record<string, unknown>) {
+  if (typeof __DEV__ !== 'undefined' && __DEV__) {
+    if (meta) {
+      console.log(`[SupabaseAuth][DeepLink] ${step}`, meta);
+    } else {
+      console.log(`[SupabaseAuth][DeepLink] ${step}`);
+    }
+  }
+}
+
+function getOtpType(rawType: string | null): EmailOtpType {
+  const normalized = (rawType ?? '').toLowerCase();
+
+  switch (normalized) {
+    case 'signup':
+    case 'recovery':
+    case 'invite':
+    case 'email':
+    case 'email_change':
+    case 'magiclink':
+      return normalized;
+    default:
+      return 'magiclink';
+  }
 }
 
 function isNetworkRequestFailure(error: unknown) {
@@ -193,7 +282,6 @@ export async function signOut(): Promise<SignOutResult> {
     if (error) {
       return { error: toFrenchAuthErrorMessage(error, 'Erreur lors de la déconnexion') };
     }
-    await unlinkRevenueCatUser('supabase_sign_out');
     return { error: null };
   } catch (error) {
     return { error: toFrenchAuthErrorMessage(error, 'Erreur lors de la déconnexion') };
@@ -238,4 +326,161 @@ export async function requestPasswordReset(email: string, redirectTo?: string): 
   } catch (error) {
     return { error: toFrenchAuthErrorMessage(error, "Impossible d'envoyer l'email de réinitialisation.") };
   }
+}
+
+export async function requestMagicLinkSignIn(email: string, redirectTo?: string): Promise<MagicLinkResult> {
+  const trimmedEmail = email.trim().toLowerCase();
+
+  if (!trimmedEmail) {
+    return { error: 'Veuillez saisir votre adresse email avant de continuer.' };
+  }
+
+  try {
+    const { error } = await supabase.auth.signInWithOtp({
+      email: trimmedEmail,
+      options: {
+        emailRedirectTo: redirectTo ?? DEFAULT_MAGIC_LINK_REDIRECT_URL,
+        // Funnel login must bind to an existing Supabase user created by backend/webhook.
+        shouldCreateUser: false,
+      },
+    });
+
+    if (error) {
+      return { error: toFrenchAuthErrorMessage(error, "Impossible d'envoyer le lien de connexion.") };
+    }
+
+    return { error: null };
+  } catch (error) {
+    return { error: toFrenchAuthErrorMessage(error, "Impossible d'envoyer le lien de connexion.") };
+  }
+}
+
+export async function handleSupabaseAuthDeepLink(url: string): Promise<DeepLinkAuthResult> {
+  const trimmedUrl = String(url || '').trim();
+  logDeepLinkDebug('received_url', {
+    hasUrl: Boolean(trimmedUrl),
+    urlPreview: trimmedUrl ? trimmedUrl.slice(0, 160) : null,
+  });
+
+  if (!trimmedUrl) {
+    logDeepLinkDebug('skip_empty_url');
+    return { handled: false, sessionEstablished: false, error: null };
+  }
+
+  const params = parseAuthParamsFromUrl(trimmedUrl);
+  const accessToken = params.get('access_token');
+  const refreshToken = params.get('refresh_token');
+  const tokenHash = params.get('token_hash');
+  const code = params.get('code');
+  const type = params.get('type');
+  logDeepLinkDebug('parsed_params', {
+    hasAccessToken: Boolean(accessToken),
+    hasRefreshToken: Boolean(refreshToken),
+    hasTokenHash: Boolean(tokenHash),
+    hasCode: Boolean(code),
+    otpType: type ?? null,
+    accessTokenPreview: maskToken(accessToken),
+    refreshTokenPreview: maskToken(refreshToken),
+    tokenHashPreview: maskToken(tokenHash),
+    codePreview: maskToken(code),
+  });
+
+  if (!accessToken && !refreshToken && !tokenHash && !code) {
+    logDeepLinkDebug('skip_no_auth_params');
+    return { handled: false, sessionEstablished: false, error: null };
+  }
+
+  try {
+    if (accessToken && refreshToken) {
+      logDeepLinkDebug('execute_setSession');
+      const { data, error } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+      logDeepLinkDebug('setSession_result', {
+        hasSession: Boolean(data?.session),
+        userId: data?.session?.user?.id ?? data?.user?.id ?? null,
+        hasError: Boolean(error),
+      });
+
+      if (error) {
+        return {
+          handled: true,
+          sessionEstablished: false,
+          error: toFrenchAuthErrorMessage(error, 'Impossible de valider votre connexion.'),
+        };
+      }
+
+      return {
+        handled: true,
+        sessionEstablished: Boolean(data?.session || data?.user),
+        error: null,
+      };
+    }
+
+    if (code) {
+      logDeepLinkDebug('execute_exchangeCodeForSession');
+      const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+      logDeepLinkDebug('exchangeCodeForSession_result', {
+        hasSession: Boolean(data?.session),
+        userId: data?.session?.user?.id ?? data?.user?.id ?? null,
+        hasError: Boolean(error),
+      });
+
+      if (error) {
+        return {
+          handled: true,
+          sessionEstablished: false,
+          error: toFrenchAuthErrorMessage(error, 'Impossible de valider votre connexion.'),
+        };
+      }
+
+      return {
+        handled: true,
+        sessionEstablished: Boolean(data?.session || data?.user),
+        error: null,
+      };
+    }
+
+    if (tokenHash) {
+      logDeepLinkDebug('execute_verifyOtp', {
+        otpType: getOtpType(type),
+      });
+      const { data, error } = await supabase.auth.verifyOtp({
+        type: getOtpType(type),
+        token_hash: tokenHash,
+      });
+      logDeepLinkDebug('verifyOtp_result', {
+        hasSession: Boolean(data?.session),
+        userId: data?.session?.user?.id ?? data?.user?.id ?? null,
+        hasError: Boolean(error),
+      });
+
+      if (error) {
+        return {
+          handled: true,
+          sessionEstablished: false,
+          error: toFrenchAuthErrorMessage(error, 'Impossible de valider votre connexion.'),
+        };
+      }
+
+      return {
+        handled: true,
+        sessionEstablished: Boolean(data?.session || data?.user),
+        error: null,
+      };
+    }
+  } catch (error) {
+    logDeepLinkDebug('handler_exception', {
+      message: (error as any)?.message ?? String(error ?? 'Unknown error'),
+    });
+    return {
+      handled: true,
+      sessionEstablished: false,
+      error: toFrenchAuthErrorMessage(error, 'Impossible de valider votre connexion.'),
+    };
+  }
+
+  logDeepLinkDebug('no_matching_branch');
+  return { handled: false, sessionEstablished: false, error: null };
 }

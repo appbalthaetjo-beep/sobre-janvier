@@ -15,7 +15,7 @@ const PROMO_AUTO_ENABLED = false; // Flip to true to restore automatic promo pay
 
 export default function SimplePaywallSystem({ enforce = true }: SimplePaywallSystemProps) {
   const { user, loading: authLoading } = useAuth();
-  const { hasAccess, isLoading: rcLoading } = useRevenueCat();
+  const { hasAccess, isLoading: rcLoading } = useRevenueCat(user?.uid ?? null);
   const revenueCatEnabled = isRevenueCatEnabled();
   const guardEnabled = enforce && revenueCatEnabled;
 
