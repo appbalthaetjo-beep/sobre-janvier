@@ -51,6 +51,7 @@ let initPromise: Promise<boolean> | null = null;
 let runtimeReadyPromise: Promise<void> | null = null;
 let customLogHandlerInstalled = false;
 let activeRevenueCatAppUserId: string | null = null;
+let paywallPresentationInProgress = false;
 
 const PAYWALL_ABANDON_OPENED_AT_KEY = 'paywallAbandonOpenedAtMs';
 const PAYWALL_ABANDON_CANDIDATE_AT_KEY = 'paywallAbandonCandidateAtMs';
@@ -292,6 +293,7 @@ async function markPaywallClosedWithoutPurchaseForAbandonReminders() {
 
 async function maybeScheduleAbandonRemindersFromExit() {
   if (Platform.OS !== 'ios') return;
+  if (paywallPresentationInProgress) return;
   const now = Date.now();
 
   const openedRaw =
@@ -330,6 +332,7 @@ export function initPaywallAbandonReminders() {
   if (paywallAbandonListener) return;
   paywallAbandonListener = AppState.addEventListener('change', (state) => {
     if (state === 'background' || state === 'inactive') {
+      if (paywallPresentationInProgress) return;
       void maybeScheduleAbandonRemindersFromExit();
     }
   }) as unknown as { remove?: () => void };
@@ -608,24 +611,45 @@ export async function initRevenueCat(userId?: string): Promise<boolean> {
     try {
       if (!runtimeReadyPromise) {
         runtimeReadyPromise = new Promise((resolve) => {
+          let resolved = false;
+          let subscription: { remove?: () => void } | undefined;
+          let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+
+          const finalizeResolve = () => {
+            if (resolved) return;
+            resolved = true;
+            subscription?.remove?.();
+            if (fallbackTimer) {
+              clearTimeout(fallbackTimer);
+              fallbackTimer = null;
+            }
+            resolve();
+          };
+
           const run = () => {
-            InteractionManager.runAfterInteractions(() => resolve());
+            if (resolved) return;
+            InteractionManager.runAfterInteractions(() => {
+              finalizeResolve();
+            });
           };
 
           if (AppState.currentState === 'active') {
             run();
-            return;
+          } else {
+            subscription = AppState.addEventListener?.(
+              'change',
+              (state) => {
+                if (state === 'active') {
+                  run();
+                }
+              },
+            );
           }
 
-          const subscription = AppState.addEventListener?.(
-            'change',
-            (state) => {
-              if (state === 'active') {
-                subscription?.remove?.();
-                run();
-              }
-            },
-          );
+          // Guard against rare AppState / InteractionManager stalls.
+          fallbackTimer = setTimeout(() => {
+            finalizeResolve();
+          }, 1500);
         });
       }
 
@@ -835,71 +859,70 @@ async function presentPaywallAndTrack(
   params: { offering?: any; displayCloseButton?: boolean },
   tracking?: PaywallTrackingContext,
 ) {
-  // ── Meta: log InitiateCheckout when paywall is shown ──
-  const offeringId =
-    typeof params?.offering?.identifier === 'string'
-      ? params.offering.identifier
-      : undefined;
-  logMetaInitiateCheckout({
-    placement: tracking?.placement,
-    offeringId,
-  });
+  paywallPresentationInProgress = true;
 
-  const result = await PurchasesUI.presentPaywall(params);
-  const payload = buildPaywallTrackingPayload(
-    result,
-    tracking,
-    params?.offering,
-  );
+  try {
+    const offeringId =
+      typeof params?.offering?.identifier === 'string'
+        ? params.offering.identifier
+        : undefined;
 
-  await capturePostHogEvent('paywall_result', payload);
+    logMetaInitiateCheckout({
+      placement: tracking?.placement,
+      offeringId,
+    });
 
-  if (
-    result === PAYWALL_RESULT.PURCHASED ||
-    result === PAYWALL_RESULT.RESTORED
-  ) {
-    await capturePostHogEvent('paywall_converted', payload);
+    const result = await PurchasesUI.presentPaywall(params);
+    const payload = buildPaywallTrackingPayload(
+      result,
+      tracking,
+      params?.offering,
+    );
 
-    // ── Meta: send conversion events after successful purchase ──
-    try {
-      const info = await Purchases.getCustomerInfo();
-      const activeEntitlement = info?.entitlements?.active?.[ENTITLEMENT_ID];
+    await capturePostHogEvent('paywall_result', payload);
 
-      if (activeEntitlement) {
-        const productId = activeEntitlement.productIdentifier;
-        const periodType = activeEntitlement.periodType; // 'normal' | 'trial' | 'intro'
-        // Use the latest transaction's price if available, otherwise 0
-        const latestPrice = (activeEntitlement as any)?.latestPurchaseDateMillis
-          ? 0
-          : 0;
+    if (
+      result === PAYWALL_RESULT.PURCHASED ||
+      result === PAYWALL_RESULT.RESTORED
+    ) {
+      await capturePostHogEvent('paywall_converted', payload);
 
-        if (periodType === 'trial' || periodType === 'intro') {
-          // User started a free trial
-          logMetaStartTrial({ productId, offeringId });
-          console.log('[RevenueCat→Meta] StartTrial', {
-            productId,
-            periodType,
-          });
-        } else {
-          // Paid subscription started (no trial, or trial already converted)
-          logMetaSubscribe({ productId, offeringId });
-          console.log('[RevenueCat→Meta] Subscribe', { productId, periodType });
+      try {
+        const info = await Purchases.getCustomerInfo();
+        const activeEntitlement = info?.entitlements?.active?.[ENTITLEMENT_ID];
+
+        if (activeEntitlement) {
+          const productId = activeEntitlement.productIdentifier;
+          const periodType = activeEntitlement.periodType; // 'normal' | 'trial' | 'intro'
+          const latestPrice = (activeEntitlement as any)?.latestPurchaseDateMillis
+            ? 0
+            : 0;
+
+          if (periodType === 'trial' || periodType === 'intro') {
+            logMetaStartTrial({ productId, offeringId });
+            console.log('[RevenueCat->Meta] StartTrial', {
+              productId,
+              periodType,
+            });
+          } else {
+            logMetaSubscribe({ productId, offeringId });
+            console.log('[RevenueCat->Meta] Subscribe', { productId, periodType });
+          }
+
+          logMetaPurchase(0, 'EUR', { productId, offeringId });
         }
-
-        // Always send the purchase event — this is the primary signal for
-        // Meta Ads attribution and SKAdNetwork conversion value updates.
-        // Revenue = 0 for trials (actual revenue comes when trial converts).
-        logMetaPurchase(0, 'EUR', { productId, offeringId });
+      } catch (metaErr) {
+        console.warn(
+          '[RevenueCat->Meta] Failed to send conversion events',
+          metaErr,
+        );
       }
-    } catch (metaErr) {
-      console.warn(
-        '[RevenueCat→Meta] Failed to send conversion events',
-        metaErr,
-      );
     }
-  }
 
-  return result;
+    return result;
+  } finally {
+    paywallPresentationInProgress = false;
+  }
 }
 
 // Paywall standard (offering "default")
@@ -1095,3 +1118,4 @@ export async function openManageSubscription() {
     console.warn("Impossible d'ouvrir la gestion d'abonnement:", error);
   }
 }
+

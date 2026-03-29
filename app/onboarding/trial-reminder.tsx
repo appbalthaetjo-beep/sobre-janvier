@@ -3,7 +3,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
+import { PAYWALL_RESULT } from 'react-native-purchases-ui';
 import {
   Alert,
   Image,
@@ -33,11 +34,14 @@ const PAYWALL_ONBOARDING_CONTEXT = {
   placement: 'onboarding',
   source: 'trial_reminder',
 };
+const ONBOARDING_GUEST_RC_USER_ID_KEY = 'onboardingGuestRevenueCatUserId';
+const RC_INIT_TIMEOUT_MS = 10000;
 
 export default function TrialReminderScreen() {
   const { triggerTap } = useHaptics();
   const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   const handleBack = () => {
     triggerTap('light');
@@ -69,12 +73,47 @@ export default function TrialReminderScreen() {
     await AsyncStorage.setItem('sobrietyData', JSON.stringify(sobrietyData));
   };
 
+  const resolveRevenueCatUserId = async () => {
+    const canonicalUserId = String(user?.uid || '').trim();
+    if (canonicalUserId) {
+      return canonicalUserId;
+    }
+
+    const existingGuestId = String(
+      (await AsyncStorage.getItem(ONBOARDING_GUEST_RC_USER_ID_KEY)) || '',
+    ).trim();
+    if (existingGuestId) {
+      return existingGuestId;
+    }
+
+    const generatedGuestId = `guest_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    await AsyncStorage.setItem(ONBOARDING_GUEST_RC_USER_ID_KEY, generatedGuestId);
+    return generatedGuestId;
+  };
+
   const navigateToApp = () => {
     router.replace('/(tabs)');
   };
 
+  const withTimeout = async <T,>(promise: Promise<T>, ms: number, fallback: T) => {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    try {
+      return await Promise.race<T>([
+        promise,
+        new Promise<T>((resolve) => {
+          timeoutId = setTimeout(() => resolve(fallback), ms);
+        }),
+      ]);
+    } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    }
+  };
+
   const handleContinue = async () => {
-    if (isLoading) return;
+    if (isLoading || isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
     setIsLoading(true);
     triggerTap('medium');
 
@@ -82,21 +121,33 @@ export default function TrialReminderScreen() {
       await ensureSobrietyData();
 
       if (isRevenueCatEnabled()) {
-        const canonicalUserId = String(user?.uid || '').trim();
-        if (!canonicalUserId) {
-          Alert.alert(
-            'Compte requis',
-            'Connecte-toi ou crée ton compte avant de lancer l’abonnement.',
-          );
-          router.replace('/auth/signup');
-          return;
-        }
+        const canonicalUserId = await resolveRevenueCatUserId();
+        let paywallResult = PAYWALL_RESULT.NOT_PRESENTED;
+        let revenueCatReady = false;
 
         try {
-          await initRevenueCat(canonicalUserId);
-          await linkRevenueCatUser(canonicalUserId, 'onboarding_trial_reminder');
+          revenueCatReady = await withTimeout(
+            initRevenueCat(canonicalUserId),
+            RC_INIT_TIMEOUT_MS,
+            false,
+          );
+          if (revenueCatReady) {
+            await withTimeout(
+              linkRevenueCatUser(canonicalUserId, 'onboarding_trial_reminder'),
+              5000,
+              undefined,
+            );
+          }
         } catch (error) {
           console.warn('RevenueCat init failed before paywall', error);
+        }
+
+        if (!revenueCatReady) {
+          Alert.alert(
+            'Paiement indisponible',
+            'Impossible d’ouvrir les offres pour le moment. Réessaie dans quelques instants.',
+          );
+          return;
         }
 
         void trackOnboardingScreen({
@@ -105,12 +156,15 @@ export default function TrialReminderScreen() {
         });
 
         try {
-          await showDefaultPaywall(PAYWALL_ONBOARDING_CONTEXT);
+          paywallResult = await showDefaultPaywall(PAYWALL_ONBOARDING_CONTEXT);
         } catch (error) {
           console.warn('Default paywall presentation failed', error);
         }
 
-        const hasAccess = await isProActive();
+        const hasAccess =
+          paywallResult === PAYWALL_RESULT.PURCHASED ||
+          paywallResult === PAYWALL_RESULT.RESTORED ||
+          (await withTimeout(isProActive(), 5000, false));
         if (!hasAccess) {
           Alert.alert(
             'Accès requis',
@@ -128,6 +182,7 @@ export default function TrialReminderScreen() {
       Alert.alert('Erreur', 'Une erreur est survenue. Veuillez réessayer.');
     } finally {
       setIsLoading(false);
+      isSubmittingRef.current = false;
     }
   };
 
@@ -301,3 +356,4 @@ const styles = StyleSheet.create({
     opacity: 0,
   },
 });
+

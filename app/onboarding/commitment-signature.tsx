@@ -6,6 +6,7 @@ import { ArrowLeft } from 'lucide-react-native';
 import Svg, { Path } from 'react-native-svg';
 import { useHaptics } from '@/hooks/useHaptics';
 import { LinearGradient } from 'expo-linear-gradient';
+import { requestMetaTrackingPermission } from '@/src/lib/metaAppEvents';
 
 const { width } = Dimensions.get('window');
 const signatureAreaWidth = width - 48;
@@ -22,6 +23,7 @@ export default function CommitmentSignatureScreen() {
   const [isDrawing, setIsDrawing] = useState(false);
   const pathRef = useRef<Point[]>([]);
   const moveCountRef = useRef(0);
+  const isSubmittingRef = useRef(false);
   const { triggerTap } = useHaptics();
 
   const panResponder = PanResponder.create({
@@ -83,9 +85,24 @@ export default function CommitmentSignatureScreen() {
     pathRef.current = [];
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
+    if (isSubmittingRef.current) {
+      return;
+    }
+
+    isSubmittingRef.current = true;
     triggerTap('medium');
+
+    try {
+      await requestMetaTrackingPermission();
+    } catch {
+      // ignore
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+
     router.push('/onboarding/rate-us');
+    isSubmittingRef.current = false;
   };
 
   const handleBack = () => {
@@ -204,7 +221,7 @@ export default function CommitmentSignatureScreen() {
             style={styles.continueButtonGradient}
           >
             <Text style={[styles.continueButtonText, !hasSignature && styles.continueButtonTextDisabled]}>
-              Continuer
+              Je m'engage
             </Text>
           </LinearGradient>
         </TouchableOpacity>

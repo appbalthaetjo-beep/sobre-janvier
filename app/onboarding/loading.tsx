@@ -13,7 +13,6 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
-import { requestMetaTrackingPermission } from '@/src/lib/metaAppEvents';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -41,12 +40,6 @@ export default function LoadingScreen() {
   );
 
   useEffect(() => {
-    // Request iOS App Tracking Transparency permission during the "analysis" step,
-    // not on app launch.
-    requestMetaTrackingPermission().catch((error) => {
-      console.warn('[MetaEvents] ATT request failed in loading screen', error);
-    });
-
     const steps = [
       'Apprentissage de tes déclencheurs de rechute',
       'Analyse de tes habitudes',
