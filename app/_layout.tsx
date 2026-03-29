@@ -6,6 +6,7 @@ import { useMetaAppEvents } from '@/hooks/useMetaAppEvents';
 import { usePostHogInit } from '@/hooks/usePostHogInit';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import * as SplashScreen from 'expo-splash-screen';
+import * as Updates from 'expo-updates';
 import { useAuth } from '@/hooks/useAuth';
 import { useRevenueCat } from '@/hooks/useRevenueCat';
 import SplashScreenComponent from '@/components/SplashScreen';
@@ -210,6 +211,7 @@ function RootLayoutInner() {
   const { user, loading } = useAuth();
   const { hasAccess, isLoading: rcLoading } = useRevenueCat(user?.uid ?? null);
   const [showSplash, setShowSplash] = useState(true);
+  const [isOtaGateDone, setIsOtaGateDone] = useState(__DEV__);
   const [pendingOnboarding, setPendingOnboarding] = useState<boolean | null>(null);
   const sobrietyCompatDidInitRef = useRef(false);
   const sawMagicLinkCallbackRef = useRef(false);
@@ -231,6 +233,50 @@ function RootLayoutInner() {
     })().catch((error) => {
       console.warn('[META] init failed', error);
     });
+  }, []);
+
+  useEffect(() => {
+    if (__DEV__) {
+      setIsOtaGateDone(true);
+      return;
+    }
+
+    let isActive = true;
+
+    const runOtaGate = async () => {
+      try {
+        // expo-updates is disabled in Expo Go / development runtime.
+        if (!Updates.isEnabled) {
+          return;
+        }
+
+        const update = await Updates.checkForUpdateAsync();
+        if (!update.isAvailable) {
+          return;
+        }
+
+        await Updates.fetchUpdateAsync();
+
+        if (!isActive) {
+          return;
+        }
+
+        await Updates.reloadAsync();
+      } catch (error) {
+        // Offline or network errors should never block app boot.
+        console.log('[OTA] startup update check skipped', error);
+      } finally {
+        if (isActive) {
+          setIsOtaGateDone(true);
+        }
+      }
+    };
+
+    void runOtaGate();
+
+    return () => {
+      isActive = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -590,6 +636,14 @@ function RootLayoutInner() {
     isInAuth,
     user,
   ]);
+
+  if (!isOtaGateDone) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#000000', alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" color="#FFFFFF" />
+      </View>
+    );
+  }
 
   if (!fontsLoaded && !fontError) {
     return null;
