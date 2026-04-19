@@ -3,8 +3,13 @@ import { AppEventsLogger } from 'react-native-fbsdk-next';
 
 // ─── Standard Meta Event Names ────────────────────────────────────────────────
 // Using the exact names that Meta recognises for optimisation & attribution.
-const META_EVENT_START_TRIAL = 'StartTrial';
-const META_EVENT_SUBSCRIBE = 'Subscribe';
+//
+// IMPORTANT: "Log in-app events automatically" is ENABLED in Meta's dashboard.
+// This means Meta already auto-logs Purchase, Subscribe, and StartTrial events
+// from App Store receipts.
+//
+// Only events that are NOT auto-logged (InitiateCheckout, CompleteRegistration)
+// should be sent manually via the SDK.
 const META_EVENT_INITIATE_CHECKOUT = 'fb_mobile_initiated_checkout';
 const META_EVENT_COMPLETE_REGISTRATION = 'fb_mobile_complete_registration';
 
@@ -37,77 +42,43 @@ function safeLogEvent(
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
- * Log a purchase event to Meta.
- * Should be called after a successful subscription purchase or one-time payment.
- *
- * This triggers `fb_mobile_purchase` which Meta uses for:
- *  - Install attribution in Ads Manager
- *  - SKAdNetwork conversion value update
- *  - Value Optimisation campaigns
+ * No-op: "Log in-app events automatically" is enabled in Meta's dashboard,
+ * so purchase events are auto-logged from App Store / Google Play receipts.
+ * Manually logging them causes duplicate events and attribution issues.
  */
 export function logMetaPurchase(
-  revenue: number,
-  currency: string = 'EUR',
-  extra?: { productId?: string; offeringId?: string },
+  _revenue: number,
+  _currency: string = 'EUR',
+  _extra?: { productId?: string; offeringId?: string },
 ) {
-  if (Platform.OS === 'web') return;
-
-  try {
-    const params: Record<string, string> = {};
-    if (extra?.productId) params.fb_content_id = extra.productId;
-    if (extra?.offeringId) params.fb_content_type = extra.offeringId;
-
-    // logPurchase is the canonical way to send revenue events to Meta.
-    // It automatically maps to the `fb_mobile_purchase` standard event.
-    AppEventsLogger.logPurchase(revenue, currency, params);
-    AppEventsLogger.flush?.();
-    console.log('[MetaConversion] fb_mobile_purchase', {
-      revenue,
-      currency,
-      ...params,
-    });
-  } catch (error) {
-    console.warn('[MetaConversion] Failed to log purchase', error);
-  }
+  // Intentionally empty — auto-logged by Meta dashboard.
 }
 
 /**
- * Log a "Start Trial" event to Meta.
- * Should be called when a user begins a free trial.
- *
- * Maps to Meta's `StartTrial` standard event for AEO campaigns.
+ * No-op: "Log in-app events automatically" is enabled in Meta's dashboard,
+ * so StartTrial events are auto-logged from App Store / Google Play receipts.
+ * Manually logging them causes duplicate events and attribution issues.
  */
-export function logMetaStartTrial(extra?: {
+export function logMetaStartTrial(_extra?: {
   productId?: string;
   offeringId?: string;
   trialDuration?: string;
 }) {
-  const params: Record<string, string> = {};
-  if (extra?.productId) params.fb_content_id = extra.productId;
-  if (extra?.offeringId) params.fb_content_type = extra.offeringId;
-  if (extra?.trialDuration) params.fb_description = extra.trialDuration;
-
-  safeLogEvent(META_EVENT_START_TRIAL, undefined, params);
+  // Intentionally empty — auto-logged by Meta dashboard.
 }
 
 /**
- * Log a "Subscribe" event to Meta.
- * Should be called when the user's paid subscription actually activates
- * (after the trial ends, or immediately if no trial).
- *
- * Maps to Meta's `Subscribe` standard event for AEO campaigns.
+ * No-op: "Log in-app events automatically" is enabled in Meta's dashboard,
+ * so Subscribe events are auto-logged from App Store / Google Play receipts.
+ * Manually logging them causes duplicate events and attribution issues.
  */
-export function logMetaSubscribe(extra?: {
+export function logMetaSubscribe(_extra?: {
   productId?: string;
   offeringId?: string;
   revenue?: number;
   currency?: string;
 }) {
-  const params: Record<string, string> = {};
-  if (extra?.productId) params.fb_content_id = extra.productId;
-  if (extra?.offeringId) params.fb_content_type = extra.offeringId;
-
-  safeLogEvent(META_EVENT_SUBSCRIBE, extra?.revenue, params);
+  // Intentionally empty — auto-logged by Meta dashboard.
 }
 
 /**
