@@ -4,13 +4,12 @@ import {
   requestTrackingPermissionsAsync,
 } from 'expo-tracking-transparency';
 import { Platform } from 'react-native';
-import { AppEventsLogger, Settings } from 'react-native-fbsdk-next';
+import { Settings } from 'react-native-fbsdk-next';
 
 const FACEBOOK_APP_ID = '2293641301112058';
 const ATT_REQUESTED_KEY = 'meta_att_prompt_requested';
 
 let facebookInitialized = false;
-let activationLogged = false;
 
 async function ensureFacebookInitialized(trackingStatus: string | null) {
   if (Platform.OS !== 'ios') {
@@ -92,36 +91,16 @@ async function requestTrackingPermissionOnce(): Promise<string | null> {
   }
 }
 
-async function logActivateAppOnce(trackingStatus: string | null) {
-  if (Platform.OS !== 'ios' || activationLogged) {
-    return;
-  }
-
-  const ready = await ensureFacebookInitialized(trackingStatus);
-  if (!ready) {
-    return;
-  }
-
-  activationLogged = true;
-
-  try {
-    AppEventsLogger.logEvent('fb_mobile_activate_app');
-  } catch (error) {
-    console.warn('[MetaEvents] Failed to log fb_mobile_activate_app', error);
-  }
-}
-
 export async function setupMetaAppEvents(): Promise<() => void> {
-  if (Platform.OS !== 'ios') {
-    return () => {};
-  }
-
   try {
-    const { status } = await getTrackingPermissionsAsync();
-    const trackingStatus = status && status !== 'undetermined' ? status : null;
-    await applyAdvertiserTrackingPreference(trackingStatus);
-    await logActivateAppOnce(trackingStatus);
-    return () => {};
+    if (Platform.OS === 'ios') {
+      const { status } = await getTrackingPermissionsAsync();
+      const trackingStatus =
+        status && status !== 'undetermined' ? status : null;
+      await applyAdvertiserTrackingPreference(trackingStatus);
+    } else {
+      return () => {};
+    }
   } catch (error) {
     console.warn('[MetaEvents] setup failed', error);
     return () => {};
@@ -136,7 +115,6 @@ export async function requestMetaTrackingPermission(): Promise<string | null> {
   try {
     const trackingStatus = await requestTrackingPermissionOnce();
     await applyAdvertiserTrackingPreference(trackingStatus);
-    await logActivateAppOnce(trackingStatus);
     return trackingStatus;
   } catch (error) {
     console.warn('[MetaEvents] ATT request failed', error);
