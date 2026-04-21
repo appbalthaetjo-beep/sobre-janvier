@@ -53,7 +53,7 @@ export default function ReferralCodeScreen() {
       attRequested.current = true;
       setTimeout(() => {
         requestMetaTrackingPermission().catch(() => {});
-      }, 1300);
+      }, 2000);
     }
   }, []);
 
