@@ -2,7 +2,7 @@
   "expo": {
     "name": "Sobre",
     "slug": "sobre-recovery-app",
-    "version": "1.1.2",
+    "version": "1.1.3",
     "orientation": "portrait",
     "scheme": "sobre",
     "icon": "./assets/images/icon.png",
@@ -47,7 +47,7 @@
         "NSPhotoLibraryAddUsageDescription": "Nous avons besoin d'enregistrer votre photo de profil dans votre galerie.",
         "NSCameraUsageDescription": "Nous avons besoin d'accÃ©der Ã  votre appareil photo si vous souhaitez prendre une photo de profil.",
         "NSMicrophoneUsageDescription": "Nous avons besoin d'accÃ©der au microphone pour utiliser certaines fonctionnalitÃ©s vidÃ©o en situation d'urgence.",
-        "NSUserTrackingUsageDescription": "Cette autorisation nous aide a optimiser nos campagnes publicitaires iOS tout en respectant votre vie privee.",
+        "NSUserTrackingUsageDescription": "Cette autorisation nous aide à personnaliser ton expérience et à mesurer l efficacité de nos fonctionnalités pour mieux t accompagner.",
         "SKAdNetworkItems": [
           {
             "SKAdNetworkIdentifier": "v9wttpbfk9.skadnetwork"
@@ -188,7 +188,7 @@
       [
         "expo-tracking-transparency",
         {
-          "userTrackingPermission": "Cette autorisation nous aide a optimiser nos campagnes publicitaires iOS tout en respectant votre vie privee."
+          "userTrackingPermission": "Cette autorisation nous aide à personnaliser ton expérience et à mesurer l efficacité de nos fonctionnalités pour mieux t accompagner."
         }
       ],
       [
@@ -201,11 +201,11 @@
           "advertiserIDCollectionEnabled": true,
           "autoLogAppEventsEnabled": true,
           "isAutoInitEnabled": true,
-          "iosUserTrackingPermission": "Cette autorisation nous aide a optimiser nos campagnes publicitaires iOS tout en respectant votre vie privee."
+          "iosUserTrackingPermission": "Cette autorisation nous aide à personnaliser ton expérience et à mesurer l efficacité de nos fonctionnalités pour mieux t accompagner."
         }
       ]
     ],
-    "runtimeVersion": "1.1.2",
+    "runtimeVersion": "1.1.3",
     "updates": {
       "url": "https://u.expo.dev/a4b4b61a-1ab3-4a6d-a0f4-7cf9a6becee1"
     },

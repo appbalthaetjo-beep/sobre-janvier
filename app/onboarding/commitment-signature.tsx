@@ -6,7 +6,6 @@ import { ArrowLeft } from 'lucide-react-native';
 import Svg, { Path } from 'react-native-svg';
 import { useHaptics } from '@/hooks/useHaptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import { requestMetaTrackingPermission } from '@/src/lib/metaAppEvents';
 
 const { width } = Dimensions.get('window');
 const signatureAreaWidth = width - 48;
@@ -92,14 +91,6 @@ export default function CommitmentSignatureScreen() {
 
     isSubmittingRef.current = true;
     triggerTap('medium');
-
-    try {
-      await requestMetaTrackingPermission();
-    } catch {
-      // ignore
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 2000));
 
     router.push('/onboarding/rate-us');
     isSubmittingRef.current = false;
