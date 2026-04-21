@@ -51,7 +51,9 @@ export default function ReferralCodeScreen() {
     // Déclencher l'ATT dès l'arrivée sur l'écran (une seule fois)
     if (!attRequested.current) {
       attRequested.current = true;
-      requestMetaTrackingPermission().catch(() => {});
+      setTimeout(() => {
+        requestMetaTrackingPermission().catch(() => {});
+      }, 1300);
     }
   }, []);
 

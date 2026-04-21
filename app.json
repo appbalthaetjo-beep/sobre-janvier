@@ -40,14 +40,14 @@
     "ios": {
       "appleTeamId": "CTJ238754P",
       "bundleIdentifier": "com.balthazar.sobre",
-      "buildNumber": "82",
+      "buildNumber": "83",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSPhotoLibraryUsageDescription": "Nous avons besoin d'accÃ©der Ã  votre galerie pour que vous puissiez choisir une photo de profil.",
         "NSPhotoLibraryAddUsageDescription": "Nous avons besoin d'enregistrer votre photo de profil dans votre galerie.",
         "NSCameraUsageDescription": "Nous avons besoin d'accÃ©der Ã  votre appareil photo si vous souhaitez prendre une photo de profil.",
         "NSMicrophoneUsageDescription": "Nous avons besoin d'accÃ©der au microphone pour utiliser certaines fonctionnalitÃ©s vidÃ©o en situation d'urgence.",
-        "NSUserTrackingUsageDescription": "Cette autorisation nous aide à personnaliser ton expérience et à mesurer l efficacité de nos fonctionnalités pour mieux t accompagner.",
+        "NSUserTrackingUsageDescription": "Cette autorisation nous aide a personnaliser ton experience et a mesurer l efficacite de nos fonctionnalites pour mieux t accompagner.",
         "SKAdNetworkItems": [
           {
             "SKAdNetworkIdentifier": "v9wttpbfk9.skadnetwork"
@@ -188,7 +188,7 @@
       [
         "expo-tracking-transparency",
         {
-          "userTrackingPermission": "Cette autorisation nous aide à personnaliser ton expérience et à mesurer l efficacité de nos fonctionnalités pour mieux t accompagner."
+          "userTrackingPermission": "Cette autorisation nous aide a personnaliser ton experience et a mesurer l efficacite de nos fonctionnalites pour mieux t accompagner."
         }
       ],
       [
@@ -201,7 +201,7 @@
           "advertiserIDCollectionEnabled": true,
           "autoLogAppEventsEnabled": true,
           "isAutoInitEnabled": true,
-          "iosUserTrackingPermission": "Cette autorisation nous aide à personnaliser ton expérience et à mesurer l efficacité de nos fonctionnalités pour mieux t accompagner."
+          "iosUserTrackingPermission": "Cette autorisation nous aide a personnaliser ton experience et a mesurer l efficacite de nos fonctionnalites pour mieux t accompagner."
         }
       ]
     ],
