@@ -6,45 +6,21 @@ import {
 import { Platform } from 'react-native';
 import { Settings } from 'react-native-fbsdk-next';
 
-const FACEBOOK_APP_ID = '2293641301112058';
+// SDK initialisation (setAppID / initializeSDK / setAutoLogAppEventsEnabled)
+// is handled exclusively by lib/metaSdk.ts → initMetaOnce().
+// This module is responsible only for ATT permission and advertiser-tracking flags.
 const ATT_REQUESTED_KEY = 'meta_att_prompt_requested';
 
-let facebookInitialized = false;
-
-async function ensureFacebookInitialized(trackingStatus: string | null) {
-  if (Platform.OS !== 'ios') {
-    return false;
-  }
-
-  if (facebookInitialized) {
-    return true;
-  }
+async function applyAdvertiserTrackingFlags(trackingStatus: string | null) {
+  if (Platform.OS !== 'ios') return;
 
   try {
-    Settings.setAppID(FACEBOOK_APP_ID);
-    Settings.initializeSDK?.();
-
-    // Auto-log MUST be enabled for SKAdNetwork install postbacks.
-    Settings.setAutoLogAppEventsEnabled?.(true);
-
-    if (trackingStatus) {
-      const enabled = trackingStatus === 'granted';
-      await Settings.setAdvertiserTrackingEnabled(enabled);
-      Settings.setAdvertiserIDCollectionEnabled?.(enabled);
-      console.log('[MetaEvents] Advertiser tracking set to', enabled);
-    } else {
-      // Even without explicit ATT status, enable advertiser tracking flag
-      // so Meta SDK can still register SKAdNetwork postbacks (privacy-safe).
-      await Settings.setAdvertiserTrackingEnabled(false);
-      Settings.setAdvertiserIDCollectionEnabled?.(false);
-    }
-
-    facebookInitialized = true;
-    console.log('[MetaEvents] Facebook SDK initialized');
-    return true;
+    const enabled = trackingStatus === 'granted';
+    await Settings.setAdvertiserTrackingEnabled(enabled);
+    Settings.setAdvertiserIDCollectionEnabled?.(enabled);
+    console.log('[MetaEvents] Advertiser tracking set to', enabled);
   } catch (error) {
-    console.warn('[MetaEvents] Failed to initialize Facebook SDK', error);
-    return false;
+    console.warn('[MetaEvents] Failed to set advertiser tracking flags', error);
   }
 }
 
@@ -52,18 +28,7 @@ async function applyAdvertiserTrackingPreference(status: string | null) {
   if (Platform.OS !== 'ios' || !status) {
     return;
   }
-
-  try {
-    await ensureFacebookInitialized(status);
-    const enabled = status === 'granted';
-    await Settings.setAdvertiserTrackingEnabled(enabled);
-    Settings.setAdvertiserIDCollectionEnabled?.(enabled);
-  } catch (error) {
-    console.warn(
-      '[MetaEvents] Failed to sync advertiser tracking preference',
-      error,
-    );
-  }
+  await applyAdvertiserTrackingFlags(status);
 }
 
 async function requestTrackingPermissionOnce(): Promise<string | null> {
@@ -98,13 +63,11 @@ export async function setupMetaAppEvents(): Promise<() => void> {
       const trackingStatus =
         status && status !== 'undetermined' ? status : null;
       await applyAdvertiserTrackingPreference(trackingStatus);
-    } else {
-      return () => {};
     }
   } catch (error) {
     console.warn('[MetaEvents] setup failed', error);
-    return () => {};
   }
+  return () => {};
 }
 
 export async function requestMetaTrackingPermission(): Promise<string | null> {
