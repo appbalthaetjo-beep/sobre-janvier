@@ -2,6 +2,7 @@ import { getExpoPublicEnv } from '@/lib/publicEnv';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
+import { getTrackingPermissionsAsync } from 'expo-tracking-transparency';
 import { AppState, InteractionManager, Linking, Platform } from 'react-native';
 import { AppEventsLogger } from 'react-native-fbsdk-next';
 import 'react-native-get-random-values';
@@ -70,8 +71,7 @@ const POST_PURCHASE_BLOCKERS_REMINDER_ID_30M_KEY =
   'postPurchaseBlockersReminderNotificationId30m';
 const POST_PURCHASE_BLOCKERS_REMINDER_URL =
   'sobre://blocking-settings?source=post-purchase-reminder';
-const RC_DEVICE_IDENTIFIERS_SYNCED_KEY =
-  'revenueCatDeviceIdentifiersSynced';
+const RC_DEVICE_IDENTIFIERS_SYNCED_KEY = 'revenueCatDeviceIdentifiersSynced';
 const RC_FB_ANON_ID_SYNCED_KEY = 'revenueCatFbAnonIdSynced';
 
 let paywallOpenedAtMs: number | null = null;
@@ -430,7 +430,10 @@ function getExpectedApiKeyPrefixes(): string[] {
 }
 
 function installCustomRevenueCatLogHandler() {
-  if (customLogHandlerInstalled || typeof Purchases?.setLogHandler !== 'function') {
+  if (
+    customLogHandlerInstalled ||
+    typeof Purchases?.setLogHandler !== 'function'
+  ) {
     return;
   }
 
@@ -526,29 +529,40 @@ function shouldTreatRevenueCatAttributeErrorAsSynced(error: unknown) {
 }
 
 async function syncRevenueCatStaticSubscriberAttributesOnce() {
-  if (await hasRevenueCatAttributeBeenSynced(RC_DEVICE_IDENTIFIERS_SYNCED_KEY)) {
-    if (__DEV__) {
-      console.log('[RevenueCat] collectDeviceIdentifiers skipped (already sent)');
-    }
-  } else {
-    try {
-      await Purchases.collectDeviceIdentifiers();
-      await markRevenueCatAttributeSynced(RC_DEVICE_IDENTIFIERS_SYNCED_KEY);
-      console.log('[RevenueCat] collectDeviceIdentifiers ok');
-    } catch (error) {
-      if (shouldTreatRevenueCatAttributeErrorAsSynced(error)) {
-        await markRevenueCatAttributeSynced(RC_DEVICE_IDENTIFIERS_SYNCED_KEY);
-      }
-      console.warn('[RevenueCat] collectDeviceIdentifiers failed', error);
-    }
+  // if (
+  //   await hasRevenueCatAttributeBeenSynced(RC_DEVICE_IDENTIFIERS_SYNCED_KEY)
+  // ) {
+  //   if (__DEV__) {
+  //     console.log(
+  //       '[RevenueCat] collectDeviceIdentifiers skipped (already sent)',
+  //     );
+  //   }
+  // } else {
+  //   try {
+  //     await Purchases.collectDeviceIdentifiers();
+  //     await markRevenueCatAttributeSynced(RC_DEVICE_IDENTIFIERS_SYNCED_KEY);
+  //     console.log('[RevenueCat] collectDeviceIdentifiers ok');
+  //   } catch (error) {
+  //     if (shouldTreatRevenueCatAttributeErrorAsSynced(error)) {
+  //       await markRevenueCatAttributeSynced(RC_DEVICE_IDENTIFIERS_SYNCED_KEY);
+  //     }
+  //     console.warn('[RevenueCat] collectDeviceIdentifiers failed', error);
+  //   }
+  // }
+
+  try {
+    await Purchases.collectDeviceIdentifiers();
+    console.log('[RevenueCat] collectDeviceIdentifiers ok');
+  } catch (error) {
+    console.warn('[RevenueCat] collectDeviceIdentifiers failed', error);
   }
 
-  if (await hasRevenueCatAttributeBeenSynced(RC_FB_ANON_ID_SYNCED_KEY)) {
-    if (__DEV__) {
-      console.log('[RevenueCat] setFBAnonymousID skipped (already sent)');
-    }
-    return;
-  }
+  // if (await hasRevenueCatAttributeBeenSynced(RC_FB_ANON_ID_SYNCED_KEY)) {
+  //   if (__DEV__) {
+  //     console.log('[RevenueCat] setFBAnonymousID skipped (already sent)');
+  //   }
+  //   return;
+  // }
 
   try {
     const fbAnonId = await AppEventsLogger.getAnonymousID();
@@ -557,15 +571,36 @@ async function syncRevenueCatStaticSubscriberAttributesOnce() {
     }
 
     await Purchases.setFBAnonymousID(fbAnonId);
-    await markRevenueCatAttributeSynced(RC_FB_ANON_ID_SYNCED_KEY);
+    const attStatus =
+      Platform.OS === 'ios'
+        ? await getTrackingPermissionsAsync().then(
+            ({ status }: { status: string }) => {
+              const map: Record<string, string> = {
+                granted: 'authorized',
+                denied: 'denied',
+                undetermined: 'notDetermined',
+                restricted: 'restricted',
+              };
+              return map[status] ?? 'notDetermined';
+            },
+          )
+        : undefined;
+
+    const attributes: Record<string, string> = { $fbAnonId: fbAnonId ?? '' };
+    if (attStatus !== undefined) {
+      attributes['$attConsentStatus'] = attStatus;
+    }
+    console.log('[RevenueCat] setAttributes', attributes);
+    await Purchases.setAttributes(attributes);
+    // await markRevenueCatAttributeSynced(RC_FB_ANON_ID_SYNCED_KEY);
     console.log(
       '[RevenueCat] setFBAnonymousID ok',
       fbAnonId.slice(0, 8) + '...',
     );
   } catch (error) {
-    if (shouldTreatRevenueCatAttributeErrorAsSynced(error)) {
-      await markRevenueCatAttributeSynced(RC_FB_ANON_ID_SYNCED_KEY);
-    }
+    // if (shouldTreatRevenueCatAttributeErrorAsSynced(error)) {
+    // await markRevenueCatAttributeSynced(RC_FB_ANON_ID_SYNCED_KEY);
+    // }
     console.warn('[RevenueCat] setFBAnonymousID failed', error);
   }
 }
@@ -636,14 +671,11 @@ export async function initRevenueCat(userId?: string): Promise<boolean> {
           if (AppState.currentState === 'active') {
             run();
           } else {
-            subscription = AppState.addEventListener?.(
-              'change',
-              (state) => {
-                if (state === 'active') {
-                  run();
-                }
-              },
-            );
+            subscription = AppState.addEventListener?.('change', (state) => {
+              if (state === 'active') {
+                run();
+              }
+            });
           }
 
           // Guard against rare AppState / InteractionManager stalls.
@@ -655,7 +687,7 @@ export async function initRevenueCat(userId?: string): Promise<boolean> {
 
       await runtimeReadyPromise;
 
-      await Purchases.configure({
+      Purchases.configure({
         apiKey,
         appUserID: canonicalUserId || undefined,
       });
@@ -665,7 +697,9 @@ export async function initRevenueCat(userId?: string): Promise<boolean> {
       console.log('[RevenueCat] configure ok');
 
       if (!canonicalUserId) {
-        console.log('[RevenueCat] skipping subscriber attributes sync (no confirmed app user id)');
+        console.log(
+          '[RevenueCat] skipping subscriber attributes sync (no confirmed app user id)',
+        );
         return true;
       }
 
@@ -894,7 +928,8 @@ async function presentPaywallAndTrack(
         if (activeEntitlement) {
           const productId = activeEntitlement.productIdentifier;
           const periodType = activeEntitlement.periodType; // 'normal' | 'trial' | 'intro'
-          const latestPrice = (activeEntitlement as any)?.latestPurchaseDateMillis
+          const latestPrice = (activeEntitlement as any)
+            ?.latestPurchaseDateMillis
             ? 0
             : 0;
 
@@ -906,7 +941,10 @@ async function presentPaywallAndTrack(
             });
           } else {
             logMetaSubscribe({ productId, offeringId });
-            console.log('[RevenueCat->Meta] Subscribe', { productId, periodType });
+            console.log('[RevenueCat->Meta] Subscribe', {
+              productId,
+              periodType,
+            });
           }
 
           logMetaPurchase(0, 'EUR', { productId, offeringId });
@@ -1118,4 +1156,3 @@ export async function openManageSubscription() {
     console.warn("Impossible d'ouvrir la gestion d'abonnement:", error);
   }
 }
-
