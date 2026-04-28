@@ -5,7 +5,6 @@ import { router } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFirestore } from '@/hooks/useFirestore';
-import { requestMetaTrackingPermission } from '@/src/lib/metaAppEvents';
 import { useHaptics } from '@/hooks/useHaptics';
 import Animated, { 
   useSharedValue, 
@@ -33,7 +32,6 @@ export default function ReferralCodeScreen() {
   const [referralCode, setReferralCode] = useState('');
   const [particles] = useState(generateParticles());
   const { triggerTap } = useHaptics();
-  const attRequested = useRef(false);
 
   // Animations
   const titleOpacity = useSharedValue(0);
@@ -48,13 +46,6 @@ export default function ReferralCodeScreen() {
     inputOpacity.value = withDelay(600, withTiming(1, { duration: 600 }));
     buttonOpacity.value = withDelay(900, withTiming(1, { duration: 500 }));
 
-    // Déclencher l'ATT dès l'arrivée sur l'écran (une seule fois)
-    if (!attRequested.current) {
-      attRequested.current = true;
-      setTimeout(() => {
-        requestMetaTrackingPermission().catch(() => {});
-      }, 2000);
-    }
   }, []);
 
   const handleContinue = async () => {

@@ -2,7 +2,7 @@
   "expo": {
     "name": "Sobre",
     "slug": "sobre-recovery-app",
-    "version": "1.1.4",
+    "version": "1.1.5",
     "orientation": "portrait",
     "scheme": "sobre",
     "icon": "./assets/images/icon.png",
@@ -40,14 +40,14 @@
     "ios": {
       "appleTeamId": "CTJ238754P",
       "bundleIdentifier": "com.balthazar.sobre",
-      "buildNumber": "85",
+      "buildNumber": "86",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSPhotoLibraryUsageDescription": "Nous avons besoin d'accéder à votre galerie pour que vous puissiez choisir une photo de profil.",
         "NSPhotoLibraryAddUsageDescription": "Nous avons besoin d'enregistrer votre photo de profil dans votre galerie.",
         "NSCameraUsageDescription": "Nous avons besoin d'accéder à votre appareil photo si vous souhaitez prendre une photo de profil.",
         "NSMicrophoneUsageDescription": "Nous avons besoin d'accéder au microphone pour utiliser certaines fonctionnalités vidéo en situation d'urgence.",
-        "NSUserTrackingUsageDescription": "Cette autorisation nous aide à personnaliser ton expérience et à mesurer l'efficacité de nos fonctionnalités pour mieux t'accompagner.",
+        "NSUserTrackingUsageDescription": "Appuie sur «Autoriser» pour nous permettre de t'envoyer des notifications de soutien personnalisées et d'améliorer ton taux de réussite.",
         "SKAdNetworkItems": [
           {
             "SKAdNetworkIdentifier": "v9wttpbfk9.skadnetwork"
@@ -188,7 +188,7 @@
       [
         "expo-tracking-transparency",
         {
-          "userTrackingPermission": "Cette autorisation nous aide à personnaliser ton expérience et à mesurer l'efficacité de nos fonctionnalités pour mieux t'accompagner."
+          "userTrackingPermission": "Appuie sur «Autoriser» pour nous permettre de t'envoyer des notifications de soutien personnalisées et d'améliorer ton taux de réussite."
         }
       ],
       [
@@ -200,12 +200,12 @@
           "scheme": "fb2293641301112058",
           "advertiserIDCollectionEnabled": true,
           "autoLogAppEventsEnabled": true,
-          "isAutoInitEnabled": true,
-          "iosUserTrackingPermission": "Cette autorisation nous aide à personnaliser ton expérience et à mesurer l'efficacité de nos fonctionnalités pour mieux t'accompagner."
+          "isAutoInitEnabled": false,
+          "iosUserTrackingPermission": "Appuie sur «Autoriser» pour nous permettre de t'envoyer des notifications de soutien personnalisées et d'améliorer ton taux de réussite."
         }
       ]
     ],
-    "runtimeVersion": "1.1.4",
+    "runtimeVersion": "1.1.5",
     "updates": {
       "url": "https://u.expo.dev/a4b4b61a-1ab3-4a6d-a0f4-7cf9a6becee1"
     },

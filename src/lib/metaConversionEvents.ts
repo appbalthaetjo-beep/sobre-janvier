@@ -1,15 +1,6 @@
 import { Platform } from 'react-native';
 import { AppEventsLogger } from 'react-native-fbsdk-next';
 
-// ─── Standard Meta Event Names ────────────────────────────────────────────────
-// Using the exact names that Meta recognises for optimisation & attribution.
-//
-// IMPORTANT: "Log in-app events automatically" is ENABLED in Meta's dashboard.
-// This means Meta already auto-logs Purchase, Subscribe, and StartTrial events
-// from App Store receipts.
-//
-// Only events that are NOT auto-logged (InitiateCheckout, CompleteRegistration)
-// should be sent manually via the SDK.
 const META_EVENT_INITIATE_CHECKOUT = 'fb_mobile_initiated_checkout';
 const META_EVENT_COMPLETE_REGISTRATION = 'fb_mobile_complete_registration';
 
@@ -41,44 +32,39 @@ function safeLogEvent(
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-/**
- * No-op: "Log in-app events automatically" is enabled in Meta's dashboard,
- * so purchase events are auto-logged from App Store / Google Play receipts.
- * Manually logging them causes duplicate events and attribution issues.
- */
 export function logMetaPurchase(
-  _revenue: number,
-  _currency: string = 'EUR',
-  _extra?: { productId?: string; offeringId?: string },
+  revenue: number,
+  currency: string = 'EUR',
+  extra?: { productId?: string; offeringId?: string },
 ) {
-  // Intentionally empty — auto-logged by Meta dashboard.
+  const params: Record<string, string> = {};
+  if (extra?.productId) params.fb_content_id = extra.productId;
+  if (extra?.offeringId) params.fb_order_id = extra.offeringId;
+  safeLogEvent('fb_mobile_purchase', revenue > 0 ? revenue : undefined, params);
 }
 
-/**
- * No-op: "Log in-app events automatically" is enabled in Meta's dashboard,
- * so StartTrial events are auto-logged from App Store / Google Play receipts.
- * Manually logging them causes duplicate events and attribution issues.
- */
-export function logMetaStartTrial(_extra?: {
+export function logMetaStartTrial(extra?: {
   productId?: string;
   offeringId?: string;
   trialDuration?: string;
 }) {
-  // Intentionally empty — auto-logged by Meta dashboard.
+  const params: Record<string, string> = {};
+  if (extra?.productId) params.fb_content_id = extra.productId;
+  if (extra?.offeringId) params.fb_order_id = extra.offeringId;
+  if (extra?.trialDuration) params.fb_num_items = extra.trialDuration;
+  safeLogEvent('fb_mobile_start_trial', undefined, params);
 }
 
-/**
- * No-op: "Log in-app events automatically" is enabled in Meta's dashboard,
- * so Subscribe events are auto-logged from App Store / Google Play receipts.
- * Manually logging them causes duplicate events and attribution issues.
- */
-export function logMetaSubscribe(_extra?: {
+export function logMetaSubscribe(extra?: {
   productId?: string;
   offeringId?: string;
   revenue?: number;
   currency?: string;
 }) {
-  // Intentionally empty — auto-logged by Meta dashboard.
+  const params: Record<string, string> = {};
+  if (extra?.productId) params.fb_content_id = extra.productId;
+  if (extra?.offeringId) params.fb_order_id = extra.offeringId;
+  safeLogEvent('fb_mobile_subscribe', extra?.revenue ?? undefined, params);
 }
 
 /**

@@ -172,7 +172,7 @@ export default function ResultsScreen() {
 
   const handleCheckSymptoms = () => {
     triggerTap('medium');
-    router.push('/onboarding/symptoms');
+    router.push('/onboarding/att-primer');
   };
 
   return (

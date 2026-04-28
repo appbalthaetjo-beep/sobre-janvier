@@ -45,6 +45,7 @@ const ONBOARDING_STEPS: { path: string; screen_name: string }[] = [
   { path: '/onboarding/question-13', screen_name: 'question_13' },
   { path: '/onboarding/loading', screen_name: 'loading' },
   { path: '/onboarding/results', screen_name: 'results' },
+  { path: '/onboarding/att-primer', screen_name: 'att_primer' },
   { path: '/onboarding/testimonials', screen_name: 'testimonials' },
   { path: '/onboarding/symptoms', screen_name: 'symptoms' },
   { path: '/onboarding/slide-3', screen_name: 'slide_3' },
