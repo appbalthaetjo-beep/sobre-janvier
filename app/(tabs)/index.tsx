@@ -12,6 +12,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Book, Heart, RotateCcw, Share, TriangleAlert as AlertTriangle } from 'lucide-react-native';
 import OpenBlockPickerButton from '@/components/OpenBlockPickerButton';
+import BlockerGuide from '@/components/BlockerGuide';
+import { hasSeenBlockerGuide, markBlockerGuideSeen } from '@/utils/blockerGuideFlag';
 import { scheduleDay7Prompt } from '@/utils/reviewPrompts';
 import { getAppOpenStreak } from '@/src/appOpenStreak';
 import { maybeNotifyMilestone } from '@/src/milestoneNotifications';
@@ -24,6 +26,35 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 export default function HomeScreen() {
   const { loadSobrietyData, saveSobrietyData } = useFirestore();
+  const scrollViewRef = useRef<any>(null);
+  const blockRef = useRef<any>(null);
+  const [blockerHl, setBlockerHl] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+
+  const pendingGuide = useRef(false);
+
+  const measureBlocker = useCallback(() => {
+    blockRef.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
+      if (h > 0) {
+        pendingGuide.current = false;
+        setBlockerHl({ x, y, w, h });
+      }
+    });
+  }, []);
+
+  const startBlockerGuide = useCallback(() => {
+    pendingGuide.current = true;
+    scrollViewRef.current?.scrollToEnd({ animated: true });
+  }, []);
+
+  useEffect(() => {
+    hasSeenBlockerGuide().then(seen => { if (!seen) startBlockerGuide(); });
+  }, [startBlockerGuide]);
+
+  const closeBlockerGuide = useCallback(() => {
+    markBlockerGuideSeen();
+    setBlockerHl(null);
+    scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+  }, []);
   const [sobrietyData, setSobrietyData] = useState({
     startDate: new Date().toISOString(),
     daysSober: 0,
@@ -241,7 +272,12 @@ export default function HomeScreen() {
       <StatusBar barStyle="light-content" backgroundColor="#000000" />
       
       <SafeAreaView style={styles.safeArea}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        <ScrollView
+          ref={scrollViewRef}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+          onMomentumScrollEnd={() => { if (pendingGuide.current) measureBlocker(); }}
+        >
           
           {/* 1. Logo et slogan */}
           <View style={styles.header}>
@@ -267,7 +303,7 @@ export default function HomeScreen() {
             <View style={styles.timerAndCrystalRow}>
               {/* Timer vertical à gauche */}
               <View style={styles.timerSection}>
-                
+
                 <View style={styles.timerVertical}>
                   <View style={styles.timeBlock}>
                     <Text style={styles.timeNumber}>{daysElapsed}</Text>
@@ -388,7 +424,9 @@ export default function HomeScreen() {
           ) : null}
 
           {/* 4. Missions du jour */}
-          <DailyMissions />
+          <View>
+            <DailyMissions />
+          </View>
 
           {/* 5. Actions rapides (grille 2x2) */}
           <View style={styles.actionsContainer}>
@@ -431,20 +469,20 @@ export default function HomeScreen() {
             </View>
 
             {/* Bouton bloquer apps */}
-            <OpenBlockPickerButton
-              style={styles.blockSitesButton}
-              textStyle={styles.blockSitesText}
-            />
+            <View ref={blockRef}>
+              <OpenBlockPickerButton
+                style={styles.blockSitesButton}
+                textStyle={styles.blockSitesText}
+              />
+            </View>
           </View>
 
         </ScrollView>
         
         {/* Bouton d'urgence permanent au-dessus de la tab bar */}
-        <View 
-          style={styles.emergencyButtonContainer}
-        >
+        <View style={styles.emergencyButtonContainer}>
           <BlurView intensity={20} style={styles.emergencyButtonBlur}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.emergencyButton}
               onPress={() => router.push('/emergency')}
             >
@@ -470,6 +508,14 @@ export default function HomeScreen() {
           />
         )}
       </SafeAreaView>
+
+      {blockerHl && (
+        <BlockerGuide
+          hl={blockerHl}
+          onConfigure={() => { closeBlockerGuide(); router.push('/blocking-settings'); }}
+          onSkip={closeBlockerGuide}
+        />
+      )}
     </View>
   );
 }
